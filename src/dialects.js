@@ -37,7 +37,7 @@ export const DIALECTS = {
       'ARRAY', 'BINARY', 'GEOGRAPHY'],
   },
   bigquery: {
-    label: 'BigQuery',
+    label: 'BigQuery (CTE)',
     default: 'STRING',
     types: ['STRING', 'INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'BOOL',
       'BYTES', 'DATE', 'DATETIME', 'TIMESTAMP', 'TIME', 'JSON',
