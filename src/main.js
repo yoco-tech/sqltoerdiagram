@@ -53,6 +53,7 @@ function collectLayout() {
     positions,
     camera: { x: Math.round(diagram.cam.x), y: Math.round(diagram.cam.y), scale: +diagram.cam.scale.toFixed(4) },
     annotations: diagram.annotations.map(a => ({ ...a })),
+    hidden: [...diagram.hidden],
   };
 }
 function saveLayout() {
@@ -84,7 +85,7 @@ function placeNewTables(model) {
   const missing = model.tables.filter(t => !Number.isFinite(t.x));
   if (!missing.length) return;
   const placed = model.tables.filter(t => Number.isFinite(t.x));
-  if (!placed.length) { layout(model, layoutOpts); return; }
+  if (!placed.length) { layout(model, layoutOpts, diagram.hidden); return; }
   let x1 = -Infinity, y0 = Infinity;
   for (const t of placed) { x1 = Math.max(x1, t.x + t.w); y0 = Math.min(y0, t.y); }
   let x = x1 + 80, y = Number.isFinite(y0) ? y0 : 40;
@@ -98,6 +99,53 @@ const savedTheme = localStorage.getItem('dbdiga-theme') || 'dark';
 diagram.setTheme(savedTheme);
 
 diagram.start();
+
+// ---- hide tables: right-click context menu + "N hidden" restore chip ----
+const ctxMenu = document.createElement('div');
+ctxMenu.className = 'ctx-menu';
+ctxMenu.hidden = true;
+canvas.parentElement.appendChild(ctxMenu);
+const hideCtx = () => { ctxMenu.hidden = true; };
+
+const hiddenChip = document.createElement('button');
+hiddenChip.className = 'hidden-chip';
+hiddenChip.hidden = true;
+hiddenChip.title = 'Show all hidden tables';
+hiddenChip.addEventListener('click', () => diagram.showAllHidden());
+canvas.parentElement.appendChild(hiddenChip);
+function syncHiddenChip() {
+  const n = diagram.hiddenCount();
+  hiddenChip.hidden = n === 0;
+  hiddenChip.textContent = n ? `${n} hidden · Show all` : '';
+}
+diagram.onHiddenChange = () => { syncHiddenChip(); saveLayoutDebounced(); };
+
+canvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const t = diagram.tableAt(sx, sy);
+  const items = [];
+  if (t) {
+    const multi = diagram.selected.has(t) && diagram.selected.size > 1;
+    items.push({ label: multi ? `Hide ${diagram.selected.size} tables` : 'Hide table', act: () => diagram.hideTable(t) });
+  }
+  if (diagram.hiddenCount() > 0) items.push({ label: `Show all hidden (${diagram.hiddenCount()})`, act: () => diagram.showAllHidden() });
+  if (!items.length) { hideCtx(); return; }
+  ctxMenu.innerHTML = '';
+  for (const it of items) {
+    const b = document.createElement('button');
+    b.className = 'ctx-item';
+    b.textContent = it.label;
+    b.addEventListener('click', () => { it.act(); hideCtx(); });
+    ctxMenu.appendChild(b);
+  }
+  ctxMenu.style.left = sx + 'px';
+  ctxMenu.style.top = sy + 'px';
+  ctxMenu.hidden = false;
+});
+window.addEventListener('mousedown', (e) => { if (!ctxMenu.contains(e.target)) hideCtx(); });
+window.addEventListener('blur', hideCtx);
 
 let lastModel = null;
 let firstRender = true;
@@ -136,15 +184,16 @@ function rebuild({ arrange = false, restore = null } = {}) {
   diagram._tmapDirty = true;
 
   if (arrange) {
-    layout(result, layoutOpts);
+    layout(result, layoutOpts, diagram.hidden);
     diagram.fit();
   } else if (restore) {
+    diagram.setHidden(restore.hidden);               // restore hidden tables before placing
     placeNewTables(result);                          // tables not in the saved layout
     diagram.setAnnotations(sanitizeAnnotations(restore.annotations));
     if (restore.camera) diagram.setCamera(restore.camera);
     else diagram.fit();
   } else if (firstRender) {
-    layout(result, layoutOpts);
+    layout(result, layoutOpts, diagram.hidden);
     diagram.fit();
   } else if (structureChanged) {
     placeNewTables(result);                          // keep manual layout, place only new tables
@@ -334,7 +383,9 @@ function setSqlHidden(hidden) {
 }
 $('btn-collapse-sql').addEventListener('click', () => setSqlHidden(true));
 $('btn-open-sql').addEventListener('click', () => setSqlHidden(false));
-setSqlHidden(localStorage.getItem('dbdiga-sql-hidden') === '1');
+// default: panel hidden on phones (diagram-first), shown on desktop
+const savedSqlHidden = localStorage.getItem('dbdiga-sql-hidden');
+setSqlHidden(savedSqlHidden === null ? window.matchMedia('(max-width: 720px)').matches : savedSqlHidden === '1');
 
 $('zoom-in').addEventListener('click', () => diagram.zoomBy(1.25));
 $('zoom-out').addEventListener('click', () => diagram.zoomBy(0.8));
@@ -361,7 +412,7 @@ $('btn-png').addEventListener('click', () => {
 });
 
 $('btn-svg').addEventListener('click', () => {
-  const svg = exportSVG(diagram.model, diagram.themeName, diagram.annotations);
+  const svg = exportSVG(diagram.model, diagram.themeName, diagram.annotations, diagram.hidden);
   if (!svg) return;
   const blob = new Blob([svg], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
@@ -417,7 +468,7 @@ fileInput.addEventListener('change', () => {
       localStorage.setItem('dbdiga-sql', data.sql);
       if (data.dialect && DIALECTS[data.dialect]) { dialect = data.dialect; localStorage.setItem('dbdiga-dialect', dialect); syncDialect(); }
       firstRender = true;          // ensure a clean restore even if a model exists
-      rebuild({ restore: { positions: data.positions, camera: data.camera, annotations: data.annotations } });
+      rebuild({ restore: { positions: data.positions, camera: data.camera, annotations: data.annotations, hidden: data.hidden } });
       saveLayout();
     } catch (err) {
       statusEl.textContent = 'Invalid project file';
@@ -460,6 +511,12 @@ window.addEventListener('keydown', (e) => {
   } else if (!typing && (e.key === 'Delete' || e.key === 'Backspace') && diagram.selectedAnno) {
     e.preventDefault();
     diagram.deleteSelectedAnnotation();
+  } else if (!typing && (e.key === 'h' || e.key === 'H') && diagram.selected.size > 0) {
+    e.preventDefault();
+    diagram.hideTable(null);   // hide the current selection
+  } else if (e.key === 'Escape' && !typing) {
+    hideCtx();
+    diagram.clearSelection();
   }
 });
 
@@ -477,7 +534,7 @@ window.addEventListener('keydown', (e) => {
         syncDialect();
       }
       firstRender = true;
-      rebuild({ restore: { positions: data.positions, camera: data.camera, annotations: data.annotations } });
+      rebuild({ restore: { positions: data.positions, camera: data.camera, annotations: data.annotations, hidden: data.hidden } });
       saveLayout();
       return;
     } catch (err) {

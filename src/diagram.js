@@ -16,7 +16,15 @@ export class Diagram {
     this.bitmaps = new Map();      // table.key -> offscreen canvas
     this.dirty = true;
     this.frameQueued = false;
-    this.drag = null;              // active table drag
+    this.drag = null;              // active single-table drag
+    this.dragGroup = null;         // active multi-table drag
+    this.marquee = null;           // active rubber-band selection (world coords)
+    this.selected = new Set();     // multi-selected tables (for group drag)
+    this.hidden = new Set();       // keys of hidden tables (node + edges suppressed)
+    this.onHiddenChange = null;    // fired when the hidden set changes
+    this.manualLinks = [];         // user-drawn / inferred links {from:{table,col},to:{table,col}}
+    this.hoverConn = null;         // {t, colIndex} — column row showing connector dots
+    this.linking = null;           // in-progress link drag {fromKey, fromCol, side, wx, wy, cx, cy}
     this.pan = null;               // active background pan
     this.hover = null;             // table under cursor (transient highlight)
     this.pinned = null;            // clicked table (sticky focus)
@@ -52,6 +60,11 @@ export class Diagram {
     this._tmapDirty = true;
     this.pinned = null;
     this.pinnedKeys = null;
+    this.selected = new Set();
+    this.dragGroup = null;
+    this.marquee = null;
+    this.linking = null;
+    this.hoverConn = null;
     this.markDirty();
     if (!keepCamera) {/* caller may fit */}
   }
@@ -180,7 +193,7 @@ export class Diagram {
     // tables
     const pinned = this.pinned;
     for (const t of this.model.tables) {
-      if (!Number.isFinite(t.x)) continue;
+      if (!Number.isFinite(t.x) || this.hidden.has(t.key)) continue;
       if (t.x > vx1 + margin || t.x + t.w < vx0 - margin ||
           t.y > vy1 + margin || t.y + t.h < vy0 - margin) continue;
       const bm = this._bitmap(t);
@@ -196,10 +209,10 @@ export class Diagram {
       ctx.drawImage(bm, t.x, t.y, t.w, t.h);
       ctx.restore();
 
-      const emphasised = this.hover === t || this.drag?.t === t || pinned === t;
+      const emphasised = this.hover === t || this.drag?.t === t || pinned === t || this.selected.has(t);
       if (emphasised) {
         ctx.strokeStyle = theme.edgeHi;
-        ctx.lineWidth = (pinned === t ? 2.5 : 2) / cam.scale;
+        ctx.lineWidth = (pinned === t || this.selected.has(t) ? 2.5 : 2) / cam.scale;
         roundRectPath(ctx, t.x, t.y, t.w, t.h, 10);
         ctx.stroke();
       }
@@ -213,6 +226,54 @@ export class Diagram {
 
     // selection chrome (handles, colour dots, delete) for the selected annotation
     if (this.selectedAnno) this._drawAnnoChrome(this.selectedAnno);
+
+    // rubber-band marquee
+    if (this.marquee) {
+      const m = this.marquee;
+      const x = Math.min(m.ax, m.x), y = Math.min(m.ay, m.y);
+      const w = Math.abs(m.x - m.ax), h = Math.abs(m.y - m.ay);
+      ctx.save();
+      ctx.fillStyle = hexA(theme.edgeHi, 0.10);
+      ctx.strokeStyle = theme.edgeHi;
+      ctx.lineWidth = 1 / cam.scale;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+      ctx.restore();
+    }
+
+    // connector dots on the hovered column row (drag one to link)
+    if (this.hoverConn && !this.linking && !this.drag && !this.dragGroup && !this.pan) {
+      const d = this._connDots(this.hoverConn.t, this.hoverConn.colIndex);
+      const rr = 4.5 / cam.scale;
+      for (const p of d) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2);
+        ctx.fillStyle = theme.edgeHi; ctx.fill();
+        ctx.lineWidth = 2 / cam.scale; ctx.strokeStyle = theme.tableBg; ctx.stroke();
+      }
+    }
+
+    // in-progress link drag (preview)
+    if (this.linking) {
+      const k = this.linking;
+      const dx = Math.max(28, Math.abs(k.cx - k.wx) * 0.4);
+      ctx.save();
+      ctx.setLineDash([6 / cam.scale, 5 / cam.scale]);
+      ctx.strokeStyle = theme.edgeHi; ctx.lineWidth = 2 / cam.scale;
+      ctx.beginPath();
+      ctx.moveTo(k.wx, k.wy);
+      ctx.bezierCurveTo(k.wx + (k.side === 'right' ? dx : -dx), k.wy, k.cx, k.cy, k.cx, k.cy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = theme.edgeHi;
+      dot(ctx, k.wx, k.wy, 4 / cam.scale);
+      ctx.restore();
+    }
+  }
+
+  // left/right connector dot positions for a column row (world coords)
+  _connDots(t, idx) {
+    const y = t.y + HEADER_H + idx * ROW_H + ROW_H / 2;
+    return [{ x: t.x, y, side: 'left' }, { x: t.x + t.w, y, side: 'right' }];
   }
 
   // ---- annotation rendering ----
@@ -422,7 +483,13 @@ export class Diagram {
     el.style.width = Math.max(60, a.w * cam.scale) + 'px';
     el.style.height = (multiline ? a.h : 28) * cam.scale + 'px';
     el.style.fontSize = Math.max(9, 13 * cam.scale) + 'px';
-    if (multiline) el.style.color = (NOTE_COLORS[a.color] || NOTE_COLORS.yellow).text;
+    if (a.type === 'note') {
+      // edit on the note's own colour so text stays readable in dark mode
+      const c = NOTE_COLORS[a.color] || NOTE_COLORS.yellow;
+      el.style.background = c.fill;
+      el.style.color = c.text;
+      el.style.caretColor = c.text;
+    }
 
     this.canvas.parentElement.appendChild(el);
     el.focus();
@@ -491,59 +558,65 @@ export class Diagram {
     ctx.stroke();
   }
 
+  // bezier segment between two table columns (or null if not drawable / off-screen)
+  _edgeSeg(fromKey, fromCol, toKey, toCol, cull) {
+    const byKey = this._tableMap();
+    const from = byKey.get(fromKey), to = byKey.get(toKey);
+    if (!from || !to || !Number.isFinite(from.x) || !Number.isFinite(to.x)) return null;
+    if (this.hidden.has(from.key) || this.hidden.has(to.key)) return null;
+    const fy = from.y + columnY(from, fromCol);
+    const ty = to.y + columnY(to, toCol);
+    const fromRight = (from.x + from.w / 2) < (to.x + to.w / 2);
+    const fx = fromRight ? from.x + from.w : from.x;
+    const tx = fromRight ? to.x : to.x + to.w;
+    if (cull) {
+      const minX = Math.min(fx, tx), maxX = Math.max(fx, tx);
+      const minY = Math.min(fy, ty), maxY = Math.max(fy, ty);
+      if (maxX < cull.x0 || minX > cull.x1 || maxY < cull.y0 || minY > cull.y1) return null;
+    }
+    const dx = Math.max(28, Math.abs(tx - fx) * 0.4);
+    return { fx, fy, tx, ty, c1x: fx + (fromRight ? dx : -dx), c2x: tx + (fromRight ? -dx : dx), fromKey, toKey };
+  }
+
   _drawEdges(vx0, vy0, vx1, vy1) {
     const { theme } = this;
-    const byKey = this._tableMap();
+    const cull = { x0: vx0, y0: vy0, x1: vx1, y1: vy1 };
     const focus = this.focus;
     const focusKey = focus ? focus.key : null;
     const fadeAlpha = this.pinned ? 0.05 : 0.16;   // pinned fades harder than transient hover
-    const highlighted = [];   // deferred so focused edges draw on top of faded ones
+    const highlighted = [];
 
-    for (const r of this.model.relations) {
-      const from = byKey.get(r.fromTable.toLowerCase());
-      const to = byKey.get(r.toTable.toLowerCase());
-      if (!from || !to || !Number.isFinite(from.x) || !Number.isFinite(to.x)) continue;
+    // FK relations + user-defined manual links (latter drawn dashed)
+    const edges = [];
+    for (const r of this.model.relations) edges.push({ fk: r.fromTable.toLowerCase(), tk: r.toTable.toLowerCase(), fc: r.fromCols[0], tc: r.toCols[0], manual: false });
+    for (const l of this.manualLinks) edges.push({ fk: l.from.table, tk: l.to.table, fc: l.from.col, tc: l.to.col, manual: true });
 
-      const fy = from.y + columnY(from, r.fromCols[0]);
-      const ty = to.y + columnY(to, r.toCols[0]);
-
-      // pick sides: connect from the side facing the other table
-      const fromRight = (from.x + from.w / 2) < (to.x + to.w / 2);
-      const fx = fromRight ? from.x + from.w : from.x;
-      const tx = fromRight ? to.x : to.x + to.w;
-
-      // cull if entirely off-screen
-      const minX = Math.min(fx, tx), maxX = Math.max(fx, tx);
-      const minY = Math.min(fy, ty), maxY = Math.max(fy, ty);
-      if (maxX < vx0 || minX > vx1 || maxY < vy0 || minY > vy1) continue;
-
-      const dx = Math.max(28, Math.abs(tx - fx) * 0.4);
-      const c1x = fx + (fromRight ? dx : -dx);
-      const c2x = tx + (fromRight ? -dx : dx);
-      const seg = { fx, fy, tx, ty, c1x, c2x };
-
-      const connected = focusKey && (from.key === focusKey || to.key === focusKey);
+    for (const e of edges) {
+      const seg = this._edgeSeg(e.fk, e.fc, e.tk, e.tc, cull);
+      if (!seg) continue;
+      seg.manual = e.manual;
+      const connected = focusKey && (seg.fromKey === focusKey || seg.toKey === focusKey);
       if (focusKey) {
         if (connected) { highlighted.push(seg); continue; }
-        this._stroke(seg, theme.edge, 1.2, fadeAlpha);   // faded clutter
+        this._stroke(seg, theme.edge, 1.2, fadeAlpha, e.manual);
       } else {
-        this._stroke(seg, theme.edge, 1.5, 0.5);     // soft baseline
+        this._stroke(seg, theme.edge, 1.5, 0.5, e.manual);
       }
     }
-
-    // focused relationships, full strength, on top
-    for (const seg of highlighted) this._stroke(seg, theme.edgeHi, 2.2, 1);
+    for (const seg of highlighted) this._stroke(seg, theme.edgeHi, 2.2, 1, seg.manual);
   }
 
-  _stroke(seg, color, width, alpha) {
+  _stroke(seg, color, width, alpha, dashed) {
     const { ctx, cam } = this;
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = color;
     ctx.lineWidth = width / cam.scale;
+    if (dashed) ctx.setLineDash([6 / cam.scale, 5 / cam.scale]);
     ctx.beginPath();
     ctx.moveTo(seg.fx, seg.fy);
     ctx.bezierCurveTo(seg.c1x, seg.fy, seg.c2x, seg.ty, seg.tx, seg.ty);
     ctx.stroke();
+    if (dashed) ctx.setLineDash([]);
     ctx.fillStyle = color;
     dot(ctx, seg.fx, seg.fy, 3 / cam.scale);
     dot(ctx, seg.tx, seg.ty, 3 / cam.scale);
@@ -565,7 +638,7 @@ export class Diagram {
     const tables = this.model.tables;
     for (let i = tables.length - 1; i >= 0; i--) {
       const t = tables[i];
-      if (!Number.isFinite(t.x)) continue;
+      if (!Number.isFinite(t.x) || this.hidden.has(t.key)) continue;
       if (w.x >= t.x && w.x <= t.x + t.w && w.y >= t.y && w.y <= t.y + t.h) return t;
     }
     return null;
@@ -576,103 +649,101 @@ export class Diagram {
     const c = this.canvas;
 
     c.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;   // ignore right/middle click (right-click = context menu)
       const r = c.getBoundingClientRect();
-      const sx = e.clientX - r.left, sy = e.clientY - r.top;
-
-      // 1) chrome of the selected annotation (colour dots / delete / resize)
-      const chrome = this._annoChromeAt(sx, sy);
-      if (chrome) {
-        const a = this.selectedAnno;
-        if (chrome.kind === 'color') { a.color = chrome.value; this.markDirty(); this.onLayoutChange?.(); }
-        else if (chrome.kind === 'delete') { this.deleteSelectedAnnotation(); }
-        else if (chrome.kind === 'resize') {
-          const w = this.screenToWorld(sx, sy);
-          this.annoResize = { a, ox: w.x - (a.x + a.w), oy: w.y - (a.y + a.h), moved: false };
-        }
-        return;
-      }
-
-      // 2) "+ add column" button under the pinned table
-      if (this._addButtonAt(sx, sy)) { this.onAddColumn?.(this.pinned.key); return; }
-
-      // 3) a sticky note (notes sit on top, grabbable anywhere)
-      const note = this._noteAt(sx, sy);
-      if (note) { this._grabAnno(note, sx, sy); c.style.cursor = 'grabbing'; return; }
-
-      // 4) a table (checked before groups so tables inside a group stay grabbable)
-      const t = this.tableAt(sx, sy);
-      if (t) {
-        if (this.selectedAnno) { this.selectedAnno = null; }
-        const idx = this.model.tables.indexOf(t);
-        this.model.tables.splice(idx, 1);
-        this.model.tables.push(t);
-        const w = this.screenToWorld(sx, sy);
-        this.drag = { t, dx: w.x - t.x, dy: w.y - t.y, moved: false };
-        this.markDirty();
-        c.style.cursor = 'grabbing';
-        return;
-      }
-
-      // 5) a group box (grabbable anywhere that isn't a table)
-      const group = this._groupAt(sx, sy);
-      if (group) { this._grabAnno(group, sx, sy); c.style.cursor = 'grabbing'; return; }
-
-      // 6) empty space -> pan
-      if (this.selectedAnno) { this.selectedAnno = null; this.markDirty(); }
-      this.pan = { sx, sy, camx: this.cam.x, camy: this.cam.y, moved: false };
+      this._pointerDown(e.clientX - r.left, e.clientY - r.top, e.shiftKey);
       c.style.cursor = 'grabbing';
     });
 
     window.addEventListener('mousemove', (e) => {
       const r = c.getBoundingClientRect();
       const sx = e.clientX - r.left, sy = e.clientY - r.top;
-      if (this.annoResize) {
-        const w = this.screenToWorld(sx, sy);
-        const a = this.annoResize.a;
-        a.w = Math.max(a.type === 'group' ? 120 : 80, w.x - this.annoResize.ox - a.x);
-        a.h = Math.max(a.type === 'group' ? 90 : 50, w.y - this.annoResize.oy - a.y);
-        this.annoResize.moved = true;
-        this.markDirty();
-      } else if (this.annoDrag) {
-        const w = this.screenToWorld(sx, sy);
-        this.annoDrag.a.x = w.x - this.annoDrag.dx;
-        this.annoDrag.a.y = w.y - this.annoDrag.dy;
-        this.annoDrag.moved = true;
-        this.markDirty();
-      } else if (this.drag) {
-        const w = this.screenToWorld(sx, sy);
-        this.drag.t.x = w.x - this.drag.dx;
-        this.drag.t.y = w.y - this.drag.dy;
-        this.drag.moved = true;
-        this.markDirty();
-      } else if (this.pan) {
-        this.cam.x = this.pan.camx + (sx - this.pan.sx);
-        this.cam.y = this.pan.camy + (sy - this.pan.sy);
-        if (Math.abs(sx - this.pan.sx) + Math.abs(sy - this.pan.sy) > 3) this.pan.moved = true;
-        this.markDirty();
-      } else {
-        const t = this.tableAt(sx, sy);
-        if (t !== this.hover) { this.hover = t; this.markDirty(); }
-        if (this._annoChromeAt(sx, sy) || this._addButtonAt(sx, sy)) c.style.cursor = 'pointer';
-        else if (t) c.style.cursor = 'grab';
-        else if (this._noteAt(sx, sy) || this._groupAt(sx, sy)) c.style.cursor = 'grab';
-        else c.style.cursor = 'default';
-      }
+      if (this._pointerMove(sx, sy)) return;   // active drag/pan handled it
+      // idle hover (mouse only)
+      const t = this.tableAt(sx, sy);
+      if (t !== this.hover) { this.hover = t; this.markDirty(); }
+      if (this._annoChromeAt(sx, sy) || this._addButtonAt(sx, sy)) c.style.cursor = 'pointer';
+      else if (t) c.style.cursor = 'grab';
+      else if (this._noteAt(sx, sy) || this._groupAt(sx, sy)) c.style.cursor = 'grab';
+      else c.style.cursor = 'default';
     });
 
     window.addEventListener('mouseup', () => {
-      // a click (no drag) on a table pins focus; a click on empty space clears it
-      if (this.drag && !this.drag.moved) this._pin(this.drag.t);
-      else if (this.pan && !this.pan.moved && this.pinned) this._pin(this.pinned);
-      const changed = (this.drag && this.drag.moved) || (this.pan && this.pan.moved) ||
-                      (this.annoDrag && this.annoDrag.moved) || (this.annoResize && this.annoResize.moved);
-      this.drag = null;
-      this.pan = null;
-      this.annoDrag = null;
-      this.annoResize = null;
+      this._pointerUp();
       c.style.cursor = this.hover ? 'grab' : 'default';
-      if (changed) this.onLayoutChange?.();
     });
+
+    // ---- touch (mobile): 1 finger = drag/pan, 2 fingers = pinch-zoom + pan ----
+    let pinch = null;
+    let tap = null;
+    let lastTapAt = 0, lastTapX = 0, lastTapY = 0;
+    const tpos = (t) => { const r = c.getBoundingClientRect(); return { sx: t.clientX - r.left, sy: t.clientY - r.top }; };
+
+    c.addEventListener('touchstart', (e) => {
+      this._cancelEdit();
+      if (e.touches.length === 1) {
+        pinch = null;
+        const p = tpos(e.touches[0]);
+        tap = { sx: p.sx, sy: p.sy, moved: false };
+        this._pointerDown(p.sx, p.sy);
+      } else if (e.touches.length === 2) {
+        this.drag = this.pan = this.annoDrag = this.annoResize = null;   // cancel single-finger
+        tap = null;
+        const a = tpos(e.touches[0]), b = tpos(e.touches[1]);
+        pinch = { dist: Math.hypot(a.sx - b.sx, a.sy - b.sy) || 1, mx: (a.sx + b.sx) / 2, my: (a.sy + b.sy) / 2 };
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    c.addEventListener('touchmove', (e) => {
+      if (pinch && e.touches.length >= 2) {
+        const a = tpos(e.touches[0]), b = tpos(e.touches[1]);
+        const dist = Math.hypot(a.sx - b.sx, a.sy - b.sy) || 1;
+        const mx = (a.sx + b.sx) / 2, my = (a.sy + b.sy) / 2;
+        const newScale = clamp(this.cam.scale * (dist / pinch.dist), 0.08, 4);
+        const k = newScale / this.cam.scale;
+        this.cam.x = mx - (mx - this.cam.x) * k;          // zoom around the pinch midpoint
+        this.cam.y = my - (my - this.cam.y) * k;
+        this.cam.x += mx - pinch.mx;                       // + two-finger pan
+        this.cam.y += my - pinch.my;
+        this.cam.scale = newScale;
+        pinch.dist = dist; pinch.mx = mx; pinch.my = my;
+        this.markDirty();
+        this.onZoom?.(newScale);
+      } else if (tap && e.touches.length === 1) {
+        const p = tpos(e.touches[0]);
+        if (Math.abs(p.sx - tap.sx) + Math.abs(p.sy - tap.sy) > 8) tap.moved = true;
+        this._pointerMove(p.sx, p.sy);
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    c.addEventListener('touchend', (e) => {
+      if (pinch && e.touches.length < 2) {
+        pinch = null;
+        this.onLayoutChange?.();
+        if (e.touches.length === 1) {                      // dropped to one finger -> resume pan
+          const p = tpos(e.touches[0]);
+          tap = { sx: p.sx, sy: p.sy, moved: true };
+          this._pointerDown(p.sx, p.sy);
+        }
+        return;
+      }
+      if (e.touches.length > 0) return;
+      // double-tap (no drag) => edit
+      if (tap && !tap.moved) {
+        const now = performance.now();
+        if (now - lastTapAt < 320 && Math.abs(tap.sx - lastTapX) + Math.abs(tap.sy - lastTapY) < 28) {
+          this.drag = this.pan = null;     // don't also pin
+          this._editAt(tap.sx, tap.sy);
+          lastTapAt = 0; tap = null;
+          return;
+        }
+        lastTapAt = now; lastTapX = tap.sx; lastTapY = tap.sy;
+      }
+      this._pointerUp();
+      tap = null;
+    }, { passive: false });
 
     c.addEventListener('wheel', (e) => {
       e.preventDefault();
@@ -687,16 +758,206 @@ export class Diagram {
     // double-click: edit annotation text, else a table/column, else zoom in
     c.addEventListener('dblclick', (e) => {
       const r = c.getBoundingClientRect();
-      const sx = e.clientX - r.left, sy = e.clientY - r.top;
-      const t = this.tableAt(sx, sy);
-      if (!t) {
-        const anno = this._annoAt(sx, sy);
-        if (anno) { this.selectedAnno = anno; this._beginEditAnnotation(anno); this.markDirty(); return; }
-      }
-      const target = this._editTargetAt(sx, sy);
-      if (target) { this._beginEdit(target); return; }
-      this._zoomAt(sx, sy, 1.6);
+      this._editAt(e.clientX - r.left, e.clientY - r.top);
     });
+  }
+
+  // ---- shared pointer logic (used by both mouse and touch) ----
+  // `additive` (Shift) drives multi-select: Shift+click toggles a table,
+  // Shift+drag on empty draws a marquee box.
+  _pointerDown(sx, sy, additive = false) {
+    // 1) chrome of the selected annotation (colour dots / delete / resize)
+    const chrome = this._annoChromeAt(sx, sy);
+    if (chrome) {
+      const a = this.selectedAnno;
+      if (chrome.kind === 'color') { a.color = chrome.value; this.markDirty(); this.onLayoutChange?.(); }
+      else if (chrome.kind === 'delete') { this.deleteSelectedAnnotation(); }
+      else if (chrome.kind === 'resize') {
+        const w = this.screenToWorld(sx, sy);
+        this.annoResize = { a, ox: w.x - (a.x + a.w), oy: w.y - (a.y + a.h), moved: false };
+      }
+      return;
+    }
+    // 2) "+ add column" button under the pinned table
+    if (this._addButtonAt(sx, sy)) { this.onAddColumn?.(this.pinned.key); return; }
+    // 3) a sticky note (notes sit on top, grabbable anywhere)
+    const note = this._noteAt(sx, sy);
+    if (note) { this._grabAnno(note, sx, sy); return; }
+    // 4) a table (before groups, so tables inside a group stay grabbable)
+    const t = this.tableAt(sx, sy);
+    if (t) {
+      if (this.selectedAnno) this.selectedAnno = null;
+      if (additive) {                                   // Shift+click toggles selection
+        if (this.selected.has(t)) this.selected.delete(t);
+        else this.selected.add(t);
+        this.pinned = null; this.pinnedKeys = null;
+        this.markDirty();
+        return;
+      }
+      const idx = this.model.tables.indexOf(t);
+      this.model.tables.splice(idx, 1);
+      this.model.tables.push(t);
+      const w = this.screenToWorld(sx, sy);
+      if (this.selected.has(t) && this.selected.size > 1) {
+        // drag the whole current selection together
+        const items = [...this.selected].filter(x => Number.isFinite(x.x))
+          .map(x => ({ t: x, sx0: x.x, sy0: x.y }));
+        this.dragGroup = { items, ax: w.x, ay: w.y, moved: false };
+      } else {
+        this.selected = new Set([t]);
+        this.drag = { t, dx: w.x - t.x, dy: w.y - t.y, moved: false };
+      }
+      this.markDirty();
+      return;
+    }
+    // 5) a group box (grabbable anywhere that isn't a table)
+    const group = this._groupAt(sx, sy);
+    if (group) { this._grabAnno(group, sx, sy); return; }
+    // 6) empty space -> Shift+drag marquee-selects; otherwise pan
+    if (this.selectedAnno) { this.selectedAnno = null; this.markDirty(); }
+    const w = this.screenToWorld(sx, sy);
+    if (additive) {
+      this.marquee = { ax: w.x, ay: w.y, x: w.x, y: w.y };
+    } else {
+      this.pan = { sx, sy, camx: this.cam.x, camy: this.cam.y, moved: false };
+    }
+  }
+
+  // returns true if an active drag/pan/resize consumed the move
+  _pointerMove(sx, sy) {
+    if (this.dragGroup) {
+      const w = this.screenToWorld(sx, sy);
+      const dx = w.x - this.dragGroup.ax, dy = w.y - this.dragGroup.ay;
+      for (const it of this.dragGroup.items) { it.t.x = it.sx0 + dx; it.t.y = it.sy0 + dy; }
+      this.dragGroup.moved = true;
+      this.markDirty();
+      return true;
+    }
+    if (this.marquee) {
+      const w = this.screenToWorld(sx, sy);
+      this.marquee.x = w.x; this.marquee.y = w.y;
+      this.markDirty();
+      return true;
+    }
+    if (this.annoResize) {
+      const w = this.screenToWorld(sx, sy);
+      const a = this.annoResize.a;
+      a.w = Math.max(a.type === 'group' ? 120 : 80, w.x - this.annoResize.ox - a.x);
+      a.h = Math.max(a.type === 'group' ? 90 : 50, w.y - this.annoResize.oy - a.y);
+      this.annoResize.moved = true;
+      this.markDirty();
+      return true;
+    }
+    if (this.annoDrag) {
+      const w = this.screenToWorld(sx, sy);
+      this.annoDrag.a.x = w.x - this.annoDrag.dx;
+      this.annoDrag.a.y = w.y - this.annoDrag.dy;
+      this.annoDrag.moved = true;
+      this.markDirty();
+      return true;
+    }
+    if (this.drag) {
+      const w = this.screenToWorld(sx, sy);
+      this.drag.t.x = w.x - this.drag.dx;
+      this.drag.t.y = w.y - this.drag.dy;
+      this.drag.moved = true;
+      this.markDirty();
+      return true;
+    }
+    if (this.pan) {
+      this.cam.x = this.pan.camx + (sx - this.pan.sx);
+      this.cam.y = this.pan.camy + (sy - this.pan.sy);
+      if (Math.abs(sx - this.pan.sx) + Math.abs(sy - this.pan.sy) > 3) this.pan.moved = true;
+      this.markDirty();
+      return true;
+    }
+    return false;
+  }
+
+  _pointerUp() {
+    // marquee end -> select tables intersecting the box (union with current)
+    if (this.marquee) {
+      const m = this.marquee;
+      const x0 = Math.min(m.ax, m.x), x1 = Math.max(m.ax, m.x);
+      const y0 = Math.min(m.ay, m.y), y1 = Math.max(m.ay, m.y);
+      if (x1 - x0 > 2 || y1 - y0 > 2) {
+        for (const t of this.model.tables) {
+          if (Number.isFinite(t.x) && t.x < x1 && t.x + t.w > x0 && t.y < y1 && t.y + t.h > y0) {
+            this.selected.add(t);
+          }
+        }
+        this.pinned = null; this.pinnedKeys = null;
+      }
+      this.marquee = null;
+      this.markDirty();
+      return;
+    }
+    if (this.dragGroup) {
+      if (this.dragGroup.moved) this.onLayoutChange?.();
+      this.dragGroup = null;
+      return;
+    }
+    // a click (no drag) on a table pins focus; a click on empty space clears it
+    if (this.drag && !this.drag.moved) this._pin(this.drag.t);
+    else if (this.pan && !this.pan.moved) {
+      if (this.selected.size) { this.selected = new Set(); this.markDirty(); }
+      if (this.pinned) this._pin(this.pinned);
+    }
+    const changed = (this.drag && this.drag.moved) || (this.pan && this.pan.moved) ||
+                    (this.annoDrag && this.annoDrag.moved) || (this.annoResize && this.annoResize.moved);
+    this.drag = null;
+    this.pan = null;
+    this.annoDrag = null;
+    this.annoResize = null;
+    if (changed) this.onLayoutChange?.();
+  }
+
+  clearSelection() {
+    if (this.selected.size) { this.selected = new Set(); this.markDirty(); }
+  }
+
+  // ---- hide / show tables ----
+  // Hide a table; if it's part of a multi-selection, hide the whole selection.
+  hideTable(t) {
+    let keys;
+    if (t && this.selected.has(t) && this.selected.size > 1) keys = [...this.selected].map(x => x.key);
+    else if (t) keys = [t.key];
+    else keys = [...this.selected].map(x => x.key);
+    if (!keys.length) return;
+    for (const k of keys) this.hidden.add(k);
+    this.selected = new Set();
+    this.pinned = null; this.pinnedKeys = null;
+    this.markDirty();
+    this.onHiddenChange?.();
+    this.onLayoutChange?.();
+  }
+
+  showAllHidden() {
+    if (!this.hidden.size) return;
+    this.hidden = new Set();
+    this.markDirty();
+    this.onHiddenChange?.();
+    this.onLayoutChange?.();
+  }
+
+  setHidden(keys) {
+    this.hidden = new Set(Array.isArray(keys) ? keys : []);
+    this.markDirty();
+    this.onHiddenChange?.();
+  }
+
+  hiddenCount() { return this.hidden.size; }
+
+  // edit whatever is under the point: annotation text, a table/column, else zoom in
+  _editAt(sx, sy) {
+    const t = this.tableAt(sx, sy);
+    if (!t) {
+      const anno = this._annoAt(sx, sy);
+      if (anno) { this.selectedAnno = anno; this._beginEditAnnotation(anno); this.markDirty(); return; }
+    }
+    const target = this._editTargetAt(sx, sy);
+    if (target) { this._beginEdit(target); return; }
+    this._zoomAt(sx, sy, 1.6);
   }
 
   // What's under the cursor for editing: the table name (header), a column
@@ -842,7 +1103,7 @@ export class Diagram {
   bounds(padding = 40) {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const t of this.model.tables) {
-      if (!Number.isFinite(t.x)) continue;
+      if (!Number.isFinite(t.x) || this.hidden.has(t.key)) continue;
       x0 = Math.min(x0, t.x); y0 = Math.min(y0, t.y);
       x1 = Math.max(x1, t.x + t.w); y1 = Math.max(y1, t.y + t.h);
     }
@@ -878,7 +1139,7 @@ export class Diagram {
     for (const a of this.annotations) if (a.type === 'group') this._drawGroup(a, all);
     this._drawEdges(-1e9, -1e9, 1e9, 1e9);
     for (const t of this.model.tables) {
-      if (!Number.isFinite(t.x)) continue;
+      if (!Number.isFinite(t.x) || this.hidden.has(t.key)) continue;
       ctx.drawImage(this._bitmap(t), t.x, t.y, t.w, t.h);
     }
     for (const a of this.annotations) if (a.type === 'note') this._drawNote(a, all);

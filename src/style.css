@@ -51,14 +51,19 @@ body {
   color: var(--text);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 /* ---------- top bar ---------- */
 .topbar {
-  height: var(--topbar-h);
+  min-height: var(--topbar-h);
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 0 14px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
@@ -91,6 +96,34 @@ body {
   white-space: nowrap;
 }
 a.btn { text-decoration: none; color: var(--text); }
+
+/* right-click context menu (hide tables) */
+.ctx-menu {
+  position: absolute; z-index: 60; min-width: 160px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 5px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.32);
+}
+.ctx-menu[hidden] { display: none; }
+.ctx-item {
+  display: block; width: 100%; text-align: left;
+  font: inherit; font-size: 13px; color: var(--text);
+  background: transparent; border: 0; border-radius: 7px;
+  padding: 8px 10px; cursor: pointer; white-space: nowrap;
+}
+.ctx-item:hover { background: var(--panel-2); }
+
+/* "N hidden · Show all" restore chip */
+.hidden-chip {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  z-index: 6;
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--text);
+  background: var(--panel); border: 1px solid var(--accent);
+  border-radius: 999px; padding: 6px 14px; cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0,0,0,.2);
+}
+.hidden-chip[hidden] { display: none; }
+.hidden-chip:hover { background: var(--panel-2); }
 .btn.ghost:hover { background: var(--panel-2); border-color: var(--border); }
 .btn.ghost:active { transform: translateY(0.5px); }
 .btn.icon { padding: 6px; display: grid; place-items: center; min-width: 32px; font-size: 15px; line-height: 1; }
@@ -144,7 +177,8 @@ a.btn { text-decoration: none; color: var(--text); }
 /* ---------- layout ---------- */
 .layout {
   display: flex;
-  height: calc(100% - var(--topbar-h));
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .editor-pane {
   width: var(--editor-w);
@@ -261,7 +295,7 @@ textarea.anno-edit {
   min-width: 0;
   overflow: hidden;
 }
-#canvas { display: block; width: 100%; height: 100%; }
+#canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
 /* ---------- empty state ---------- */
 .empty-hint {
@@ -341,9 +375,26 @@ textarea.anno-edit {
 .tool-palette .ico { width: 16px; height: 16px; opacity: .85; }
 
 @media (max-width: 720px) {
-  :root { --editor-w: 100%; }
-  .layout { flex-direction: column; }
-  .editor-pane { width: 100% !important; height: 38%; border-right: 0; border-bottom: 1px solid var(--border); }
+  .topbar { padding: 6px 8px; align-items: center; }
+  .brand { flex: 1 1 auto; min-width: 0; }
+  /* toolbar wraps onto extra rows instead of overflowing the screen */
+  .actions { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+  .actions .divider { display: none; }
+  .btn { padding: 7px 10px; }
+
+  /* SQL editor becomes a full-screen overlay, toggled by the SQL button */
+  .layout { position: relative; }
+  .canvas-pane { position: absolute; inset: 0; }
+  .editor-pane {
+    position: absolute; inset: 0; width: 100% !important;
+    border-right: 0; z-index: 8;
+  }
   .splitter { display: none; }
-  .brand .tag { display: none; }
+  .layout.sql-hidden .editor-pane { display: none; }
+
+  .tool-palette { bottom: 12px; left: 12px; }
+  .zoom-controls { bottom: 12px; right: 12px; }
+}
+@media (max-width: 460px) {
+  .brand .name { display: none; }   /* logo only — frees space for the toolbar */
 }

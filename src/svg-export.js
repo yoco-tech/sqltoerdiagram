@@ -10,9 +10,10 @@ const hexA = (hex, a) => {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 };
 
-export function exportSVG(model, themeName, annotations = []) {
+export function exportSVG(model, themeName, annotations = [], hidden = null) {
   const theme = THEMES[themeName] || THEMES.dark;
-  const ts = model.tables.filter(t => Number.isFinite(t.x));
+  const isHidden = (k) => !!(hidden && hidden.has(k));
+  const ts = model.tables.filter(t => Number.isFinite(t.x) && !isHidden(t.key));
   if (!ts.length && !annotations.length) return null;
 
   const pad = 40;
@@ -46,6 +47,7 @@ export function exportSVG(model, themeName, annotations = []) {
     const from = byKey.get(r.fromTable.toLowerCase());
     const to = byKey.get(r.toTable.toLowerCase());
     if (!from || !to || !Number.isFinite(from.x) || !Number.isFinite(to.x)) continue;
+    if (isHidden(from.key) || isHidden(to.key)) continue;
     const fy = from.y + columnY(from, r.fromCols[0]);
     const ty = to.y + columnY(to, r.toCols[0]);
     const fromRight = (from.x + from.w / 2) < (to.x + to.w / 2);

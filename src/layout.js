@@ -17,9 +17,10 @@ const PRESETS = {
   spacious:    { nodesep: 60, ranksep: 200, edgesep: 36 },
 };
 
-export function layout(model, opts = {}) {
+export function layout(model, opts = {}, hidden = null) {
   const dir = opts.dir === 'TB' ? 'TB' : 'LR';
   const preset = PRESETS[opts.spacing] || PRESETS.comfortable;
+  const isHidden = (key) => !!(hidden && hidden.has(key));
 
   // size every table from its content
   for (const t of model.tables) {
@@ -52,6 +53,7 @@ export function layout(model, opts = {}) {
   g.setDefaultEdgeLabel(() => ({}));
 
   for (const t of model.tables) {
+    if (isHidden(t.key)) continue;             // hidden tables aren't laid out
     g.setNode(t.key, { width: t.w, height: t.h });
   }
   let e = 0;
@@ -79,8 +81,8 @@ export function layout(model, opts = {}) {
     }
   }
 
-  placeOrphans(model);
-  removeOverlaps(model);
+  placeOrphans(model, isHidden);
+  removeOverlaps(model, isHidden);
 }
 
 // Guarantee no two tables overlap. dagre avoids overlaps within a rank, but
@@ -88,8 +90,8 @@ export function layout(model, opts = {}) {
 // overlapping pair apart along the smallest axis until everything is clear.
 // O(n²) per pass with a small pass count; fine for hundreds of tables.
 const GAP = 18;
-export function removeOverlaps(model) {
-  const ts = model.tables.filter(t => Number.isFinite(t.x));
+export function removeOverlaps(model, isHidden = null) {
+  const ts = model.tables.filter(t => Number.isFinite(t.x) && !(isHidden && isHidden(t.key)));
   const n = ts.length;
   if (n < 2) return;
   const MAX_PASSES = 60;
@@ -120,16 +122,17 @@ export function removeOverlaps(model) {
 
 // Tables with no relations get packed into a compact grid beside the graph,
 // rather than a single tall column that wastes space.
-function placeOrphans(model) {
+function placeOrphans(model, isHidden = null) {
+  const hid = (k) => !!(isHidden && isHidden(k));
   const connected = new Set();
   for (const r of model.relations) {
     connected.add(r.fromTable.toLowerCase());
     connected.add(r.toTable.toLowerCase());
   }
-  const orphans = model.tables.filter(t => !connected.has(t.key) || !Number.isFinite(t.x));
+  const orphans = model.tables.filter(t => !hid(t.key) && (!connected.has(t.key) || !Number.isFinite(t.x)));
   if (!orphans.length) return;
 
-  const placed = model.tables.filter(t => Number.isFinite(t.x) && connected.has(t.key));
+  const placed = model.tables.filter(t => Number.isFinite(t.x) && connected.has(t.key) && !hid(t.key));
   let maxX = 0, minY = Infinity, maxY = -Infinity;
   for (const t of placed) {
     maxX = Math.max(maxX, t.x + t.w);
