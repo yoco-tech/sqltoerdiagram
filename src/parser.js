@@ -446,7 +446,7 @@ function refsFromBody(body) {
   while ((m = re.exec(body)) !== null) {
     // skip if the match is actually a subquery keyword
     const name = m[1].trim();
-    if (/^\(/.test(name)) continue;
+    if (/^\(/.test(name) || name.includes('(')) continue;
     names.push(bareId(name).toLowerCase());
   }
   return names;
@@ -472,7 +472,7 @@ export function parseBigQuerySchema(sql) {
   let pos = withM.index + withM[0].length;
 
   // Consume CTEs: name AS ( body ) [,] ...
-  const cteRe = /\s*([`"]?[\w$]+[`"]?)\s+as\s*\(/iy;
+  const cteRe = /\s*([`"]?[\w$]+[`"]?)(?:\s*\([^)]*\))?\s+as\s*\(/iy;
   while (pos < S.length) {
     cteRe.lastIndex = pos;
     const nameM = cteRe.exec(S);
@@ -528,9 +528,8 @@ export function parseBigQuerySchema(sql) {
   // Re-parse: go back over the original stripped SQL for each CTE body.
   // We need body text. Re-extract using the same CTE name order.
   {
-    let scanPos = S.indexOf('with', 0);
-    // advance past WITH
-    scanPos += 4;
+    const withMatch = S.match(/\bwith\b/i);
+    let scanPos = withMatch ? withMatch.index + withMatch[0].length : 0;
     for (const t of tables) {
       // locate "name AS (" in remaining text
       const re = new RegExp(`\\b${t.name}\\b\\s+as\\s*\\(`, 'i');

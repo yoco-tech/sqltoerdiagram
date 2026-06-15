@@ -257,6 +257,7 @@ function rebuild({ arrange = false, restore = null } = {}) {
 
   let result;
   try {
+    // canvas editing disabled in bigquery mode — parsed nodes carry no source spans
     result = dialect === 'bigquery' ? parseBigQuerySchema(sql) : parseSchema(sql, formatChoice);
   } catch (err) {
     statusEl.textContent = 'Parse error';
