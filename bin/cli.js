@@ -2,6 +2,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { parseSchema } from '../src/parse.js';
+import { inferLinks } from '../src/infer-links.js';
 import { layout } from '../src/layout.js';
 import { exportSVG } from '../src/svg-export.js';
 
@@ -12,6 +13,7 @@ Usage: sql-to-er-diagram [options] [input-file]
 
 Options:
   -o, --output <file>  Write SVG to file instead of stdout
+  --tables <t1,t2>     Only include these tables (comma-separated, case-insensitive)
   --format <fmt>       auto|sql|bigquery|prisma|dbml|mermaid|plantuml|sqlalchemy|sequelize  (default: auto)
   --theme <theme>      dark|light  (default: dark)
   --direction <dir>    LR|TB  (default: LR)
@@ -28,6 +30,7 @@ const { values, positionals } = parseArgs({
   args: process.argv.slice(2),
   options: {
     format:    { type: 'string', default: 'auto' },
+    tables:    { type: 'string' },
     theme:     { type: 'string', default: 'dark' },
     direction: { type: 'string', default: 'LR' },
     spacing:   { type: 'string', default: 'comfortable' },
@@ -48,6 +51,16 @@ const sql = inputFile
   : readFileSync(process.stdin.fd, 'utf8');
 
 const model = parseSchema(sql, values.format);
+model.relations.push(...inferLinks(model));
+
+if (values.tables) {
+  const keep = new Set(values.tables.split(',').map(s => s.trim().toLowerCase()));
+  model.tables = model.tables.filter(t => keep.has(t.key));
+  model.relations = model.relations.filter(
+    r => keep.has(r.fromTable.toLowerCase()) && keep.has(r.toTable.toLowerCase())
+  );
+}
+
 layout(model, { dir: values.direction, spacing: values.spacing });
 const svg = exportSVG(model, values.theme);
 
