@@ -55,7 +55,13 @@ function collectLayout() {
   }
   return {
     positions,
-    camera: { x: Math.round(diagram.cam.x), y: Math.round(diagram.cam.y), scale: +diagram.cam.scale.toFixed(4) },
+    // refW/refH: the canvas size this camera was composed at — lets an embed
+    // contain-fit the exact same crop into whatever box it loads into later,
+    // instead of reapplying x/y/scale verbatim against an unrelated box size.
+    camera: {
+      x: Math.round(diagram.cam.x), y: Math.round(diagram.cam.y), scale: +diagram.cam.scale.toFixed(4),
+      refW: Math.round(diagram.viewW), refH: Math.round(diagram.viewH),
+    },
     annotations: diagram.annotations.map(a => ({ ...a })),
     hidden: [...diagram.hidden],
     manualLinks: diagram.manualLinks.map(l => ({ from: { ...l.from }, to: { ...l.to } })),
@@ -277,6 +283,7 @@ function rebuild({ arrange = false, restore = null } = {}) {
   diagram.setModel(result);
   diagram._tmapDirty = true;
 
+  let referenceSet = false;    // true once setReferenceCamera() has anchored diagram.referenceViewport
   if (arrange) {
     layout(result, layoutOpts, diagram.hidden);
     diagram.fit();
@@ -285,8 +292,14 @@ function rebuild({ arrange = false, restore = null } = {}) {
     diagram.setManualLinks(restore.manualLinks);     // restore user-drawn / inferred links
     placeNewTables(result);                          // tables not in the saved layout
     diagram.setAnnotations(sanitizeAnnotations(restore.annotations));
-    if (restore.camera) diagram.setCamera(restore.camera);
-    else diagram.fit();
+    if (restore.camera) {
+      const c = restore.camera;
+      // embeds contain-fit the camera to whatever box they actually load
+      // into (see setReferenceCamera); opening a share link in the full app
+      // just reapplies the numbers as before — no unrelated box size to fit
+      if (isEmbed && c.refW && c.refH) { diagram.setReferenceCamera(c, c.refW, c.refH); referenceSet = true; }
+      else diagram.setCamera(c);
+    } else diagram.fit();
   } else if (firstRender) {
     layout(result, layoutOpts, diagram.hidden);
     diagram.fit();
@@ -299,6 +312,12 @@ function rebuild({ arrange = false, restore = null } = {}) {
   firstRender = false;
   saveLayoutDebounced();
   renderTables();
+  // embeds pin the camera to the frame it was composed at (see resize()'s
+  // contain-fit rescale) so a later box resize scales the same crop instead
+  // of cropping it further. setReferenceCamera() already anchored this to
+  // the author's original frame (see above) — don't clobber that reference
+  // with the current (legacy-link fallback / arrange / firstRender) camera.
+  if (isEmbed && !referenceSet) diagram.freezeViewport();
 }
 
 function updateStatus(result, sql) {
@@ -657,9 +676,17 @@ $('btn-embed').addEventListener('click', async () => {
   try { payload = await encodeShare(project); }
   catch (err) { console.error(err); return; }
   const src = location.origin + location.pathname + '?embed=1#s=' + payload;
+  // bake in the aspect ratio of the canvas as it's framed right now, so a
+  // fluid-width embed keeps this exact composition at any size — no JS or
+  // cross-origin messaging needed, `aspect-ratio` is plain CSS on the host's
+  // own iframe element. `height` must stay unset (not even a fallback value):
+  // aspect-ratio only computes a dimension that's auto, so a definite height
+  // attribute would win and the box would never adopt the aspect ratio.
+  const w = Math.round(diagram.viewW) || 16, h = Math.round(diagram.viewH) || 9;
   const snippet =
-    `<iframe src="${src}" width="100%" height="500" loading="lazy"\n` +
-    `        style="border:1px solid #e5e7eb;border-radius:10px" title="ER diagram"></iframe>`;
+    `<iframe src="${src}" width="100%" loading="lazy"\n` +
+    `        style="border:1px solid #e5e7eb;border-radius:10px;aspect-ratio:${w}/${h}"\n` +
+    `        title="ER diagram"></iframe>`;
   showCodeModal('Embed this diagram', snippet, null, 'embed');
 });
 
@@ -707,8 +734,6 @@ window.addEventListener('mousemove', (e) => {
 window.addEventListener('mouseup', () => {
   if (dragSplit) { dragSplit = null; document.body.style.cursor = ''; }
 });
-
-window.addEventListener('resize', () => diagram.resize());
 
 // keyboard shortcuts
 window.addEventListener('keydown', (e) => {

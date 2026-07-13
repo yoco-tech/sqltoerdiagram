@@ -68,6 +68,8 @@ leaving your browser.
   gzip-compressed + base64. The `#…` fragment is never sent to a server, so sharing
   needs **no backend**, and opening the link restores the exact diagram.
 - **Export** to **PNG** (raster) and **SVG** (vector).
+- **Embed**: copies an `<iframe>` snippet for a read-only, live-panning/zooming
+  version of the diagram — see [Embedding a diagram](#embedding-a-diagram) below.
 
 ### Editor & appearance
 
@@ -98,6 +100,39 @@ npm run preview  # preview the production build locally
 - **Netlify / Vercel / Cloudflare Pages** — build command `npm run build`, publish dir `dist`.
 - **Any web server / S3 bucket** — just upload the contents of `dist/`.
 
+## Embedding a diagram
+
+Click **Embed** to copy an `<iframe>` snippet that renders a read-only, live
+version of the diagram (pan / zoom still work, editing doesn't) — same idea as
+**Share**, just wrapped in a frame instead of a link:
+
+```html
+<iframe src="https://sqltoerdiagram.com/?embed=1#s=…" width="100%"
+        style="border:1px solid #e5e7eb;border-radius:10px;aspect-ratio:1200/700"
+        title="ER diagram"></iframe>
+```
+
+- **Responsive by default, no JavaScript required**: the snippet has no fixed
+  `height` — it uses CSS `aspect-ratio`, baked in from however the diagram was
+  framed (zoom + pan) when you clicked **Embed**. Drop it into a narrow sidebar
+  or a full-width article and it resizes cleanly at any width. This works even
+  though the diagram is served cross-origin — a host page normally can't read
+  an iframe's content size to auto-size it, but `aspect-ratio` sidesteps that
+  entirely: it's plain CSS on the *host's own* iframe element, so no
+  `postMessage` bridge is needed.
+- **You can still set your own `height` / `max-height`**: `aspect-ratio` is just
+  the suggested default so the frame isn't a fixed size — it's plain CSS on
+  your own `<iframe>`, so replace or add to it however you like, e.g.
+  `style="width:100%;max-height:400px"`. You don't need to work out an aspect
+  ratio yourself; if the box you give it ends up a different shape than the
+  one it was composed at, the diagram scales down to fit inside it (like
+  `object-fit: contain`) rather than cropping — it may just leave a little
+  empty margin on one axis instead of filling the box edge-to-edge.
+- Requires a browser with `aspect-ratio` support (every evergreen browser,
+  Safari 15+) to size itself with no configured height. Older browsers, or a
+  host page that sets its own fixed height, fall back to the iframe's
+  specified/default size — the diagram still fits itself inside that box.
+
 ## Supported SQL
 
 - `CREATE [OR REPLACE] [TEMPORARY | TRANSIENT] TABLE [IF NOT EXISTS] name ( ... )` with quoted / backtick / `[bracket]` / `schema.qualified` names.
@@ -124,11 +159,11 @@ Select **BigQuery** from the dialect dropdown to work with BigQuery SQL instead 
 
 ## Shortcuts
 
-| Key | Action |
-| --- | --- |
-| **⌘ / Ctrl + Enter** | Re-arrange |
-| **Double-click** canvas | Zoom in |
-| Drag the pane divider | Resize the editor |
+| Key                     | Action             |
+| ----------------------- | ------------------ |
+| **⌘ / Ctrl + Enter**   | Re-arrange         |
+| **Double-click** canvas | Zoom in            |
+| Drag the pane divider   | Resize the editor  |
 
 ## License
 
