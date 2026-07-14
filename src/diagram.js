@@ -32,6 +32,7 @@ export class Diagram {
     this.pinnedKeys = null;        // Set of focused table + neighbour keys
     this.onZoom = null;
     this.onLayoutChange = null;    // fired after a drag / pan / zoom so positions persist
+    this.referenceViewport = null; // {w,h,cam} snapshot for embeds — see freezeViewport()
     this.onEdit = null;            // callback({kind, tableKey, colName?, value})
     this.onAddColumn = null;       // callback(tableKey)
     this.editing = null;           // active inline editor
@@ -126,11 +127,62 @@ export class Diagram {
     this.viewH = rect.height;
     this.canvas.width = Math.round(rect.width * this.dpr);
     this.canvas.height = Math.round(rect.height * this.dpr);
+    this._fitReference();
     this.markDirty();
   }
 
+  // an embed's box can change absolute size — the host page's own layout, or
+  // a `max-height`/fixed `height` the host set that doesn't match the aspect
+  // ratio we suggested — so rescale the camera to contain the same composed
+  // crop rather than cropping or over-zooming it. Uses the smaller of the two
+  // axis factors (like object-fit: contain), so a box that's proportionally
+  // shorter/narrower than the reference just gets a little empty margin on
+  // the other axis instead of clipping content.
+  _fitReference() {
+    const ref = this.referenceViewport;
+    if (!ref || !ref.w || !ref.h) return;
+    const factor = Math.min(this.viewW / ref.w, this.viewH / ref.h);
+    const centerX = (ref.w / 2 - ref.cam.x) / ref.cam.scale;
+    const centerY = (ref.h / 2 - ref.cam.y) / ref.cam.scale;
+    this.cam.scale = ref.cam.scale * factor;
+    this.cam.x = this.viewW / 2 - centerX * this.cam.scale;
+    this.cam.y = this.viewH / 2 - centerY * this.cam.scale;
+  }
+
+  // snapshot the current camera + viewport as the reference frame for
+  // proportional rescaling on future resizes. Embeds call this once the
+  // camera is set (from the share link or a fit()) so a later box resize
+  // scales the view to contain the same composition instead of cropping it.
+  // The normal editor never calls this, so its resize() keeps panning/zoom
+  // untouched across window resizes, as before.
+  freezeViewport() {
+    this.referenceViewport = { w: this.viewW, h: this.viewH, cam: { ...this.cam } };
+  }
+
+  // restore a camera as composed at a refW x refH viewport (from a share
+  // payload) and immediately contain-fit it to the CURRENT box size, so an
+  // embed's very first paint already shows the full composition instead of
+  // cropping to whatever box it happens to load into — the normal
+  // setCamera() has no reference viewport to correct against, so it just
+  // reapplies the numbers verbatim (right for opening a share link in the
+  // full app, where the window is a reasonable stand-in for "big enough").
+  setReferenceCamera(cam, refW, refH) {
+    if (!cam) return;
+    this.cam = { x: cam.x, y: cam.y, scale: cam.scale };
+    this.referenceViewport = { w: refW, h: refH, cam: { ...this.cam } };
+    this._fitReference();
+    this.markDirty();
+    this.onZoom?.(this.cam.scale);
+  }
+
   start() {
-    this.resize();
+    // ResizeObserver fires once immediately on observe() (covering the initial
+    // size) and again on every subsequent box-size change for any reason —
+    // window resizes, but also late reflows (font swaps, scrollbar appearing,
+    // an embedding page's layout still settling). A single getBoundingClientRect()
+    // read here plus a window-level 'resize' listener isn't enough: an iframe
+    // embed can have its box change size without the window itself resizing.
+    new ResizeObserver(() => this.resize()).observe(this.canvas);
     requestAnimationFrame(this._loop);
   }
 
