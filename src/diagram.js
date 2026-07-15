@@ -33,6 +33,7 @@ export class Diagram {
     this.onZoom = null;
     this.onLayoutChange = null;    // fired after a drag / pan / zoom so positions persist
     this.referenceViewport = null; // {w,h,cam} snapshot for embeds — see freezeViewport()
+    this.refitOnResize = false;    // embeds with no authored camera re-fit on every box change
     this.onEdit = null;            // callback({kind, tableKey, colName?, value})
     this.onAddColumn = null;       // callback(tableKey)
     this.editing = null;           // active inline editor
@@ -127,7 +128,14 @@ export class Diagram {
     this.viewH = rect.height;
     this.canvas.width = Math.round(rect.width * this.dpr);
     this.canvas.height = Math.round(rect.height * this.dpr);
-    this._fitReference();
+    // an auto-fit embed has no composition worth preserving — its camera was
+    // just "fit everything" — so re-fit to the new box rather than contain-fit
+    // the previous fit. This also recovers from Chrome giving a lazy-loaded
+    // offscreen iframe a placeholder viewport (e.g. 480x448) before its real
+    // layout: the first fit() runs against that bogus size, and only a fresh
+    // fit() at the real size produces the right framing.
+    if (this.refitOnResize) this.fit();
+    else this._fitReference();
     this.markDirty();
   }
 
@@ -147,6 +155,7 @@ export class Diagram {
     this.cam.scale = ref.cam.scale * factor;
     this.cam.x = this.viewW / 2 - centerX * this.cam.scale;
     this.cam.y = this.viewH / 2 - centerY * this.cam.scale;
+    this.onZoom?.(this.cam.scale);
   }
 
   // snapshot the current camera + viewport as the reference frame for
@@ -170,9 +179,8 @@ export class Diagram {
     if (!cam) return;
     this.cam = { x: cam.x, y: cam.y, scale: cam.scale };
     this.referenceViewport = { w: refW, h: refH, cam: { ...this.cam } };
-    this._fitReference();
+    this._fitReference();   // fires onZoom with the fitted scale
     this.markDirty();
-    this.onZoom?.(this.cam.scale);
   }
 
   start() {

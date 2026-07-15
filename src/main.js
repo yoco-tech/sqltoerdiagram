@@ -284,6 +284,7 @@ function rebuild({ arrange = false, restore = null } = {}) {
   diagram._tmapDirty = true;
 
   let referenceSet = false;    // true once setReferenceCamera() has anchored diagram.referenceViewport
+  let cameraRestored = false;  // true when a share payload's camera was applied verbatim
   if (arrange) {
     layout(result, layoutOpts, diagram.hidden);
     diagram.fit();
@@ -298,7 +299,7 @@ function rebuild({ arrange = false, restore = null } = {}) {
       // into (see setReferenceCamera); opening a share link in the full app
       // just reapplies the numbers as before — no unrelated box size to fit
       if (isEmbed && c.refW && c.refH) { diagram.setReferenceCamera(c, c.refW, c.refH); referenceSet = true; }
-      else diagram.setCamera(c);
+      else { diagram.setCamera(c); cameraRestored = true; }
     } else diagram.fit();
   } else if (firstRender) {
     layout(result, layoutOpts, diagram.hidden);
@@ -315,9 +316,20 @@ function rebuild({ arrange = false, restore = null } = {}) {
   // embeds pin the camera to the frame it was composed at (see resize()'s
   // contain-fit rescale) so a later box resize scales the same crop instead
   // of cropping it further. setReferenceCamera() already anchored this to
-  // the author's original frame (see above) — don't clobber that reference
-  // with the current (legacy-link fallback / arrange / firstRender) camera.
-  if (isEmbed && !referenceSet) diagram.freezeViewport();
+  // the author's original frame (see above) — don't clobber that reference.
+  // A legacy share camera (no refW/refH) is still an authored composition, so
+  // freeze it against the load-time box. An auto-fit camera (no camera in the
+  // payload at all — e.g. the docs pipeline sends bare SQL) is NOT a
+  // composition worth preserving: mark it to re-fit on every box change
+  // instead. Freezing it would lock in a fit() computed against whatever box
+  // the iframe booted in — for a lazy-loaded offscreen iframe, Chrome hands
+  // the frame a placeholder viewport (~480x448) until it is actually laid
+  // out, and a fit frozen against that renders far too zoomed-out once the
+  // real box arrives.
+  if (isEmbed && !referenceSet) {
+    if (cameraRestored) diagram.freezeViewport();
+    else diagram.refitOnResize = true;
+  }
 }
 
 function updateStatus(result, sql) {
