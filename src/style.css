@@ -437,6 +437,25 @@ body.embed .layout { height: 100vh; height: 100dvh; }
   box-shadow: 0 4px 16px rgba(0,0,0,.35);
 }
 
+/* ---------- comment tooltip (COMMENT ON table/column, shown on hover) ---------- */
+.comment-tooltip {
+  position: absolute;
+  z-index: 40;
+  display: none;
+  max-width: 320px;
+  padding: 7px 10px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0,0,0,.3);
+  pointer-events: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
 /* ---------- zoom controls ---------- */
 .zoom-controls {
   position: absolute;

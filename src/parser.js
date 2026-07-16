@@ -142,6 +142,7 @@ export function parseSchema(sql) {
   const tables = new Map();   // lowerName -> table object
   const relations = [];
   const errors = [];
+  const comments = [];        // {kind: 'table'|'column', target, text|null}
 
   const ensureTable = (name, nameSpan) => {
     const key = name.toLowerCase();
@@ -200,6 +201,29 @@ export function parseSchema(sql) {
       const tailBase = base + am.index + am[0].length;
       const rel = parseForeignKey(tail, tailBase, t);
       if (rel) relations.push(rel);
+      continue;
+    }
+
+    // COMMENT ON TABLE x IS '...' / COMMENT ON COLUMN x.y IS '...' (PostgreSQL).
+    // Collected and applied after the loop so ordering vs CREATE TABLE doesn't
+    // matter and comments on unknown tables don't create phantom tables.
+    const com = stmt.match(/comment\s+on\s+(table|column)\s+(\S+)\s+is\s+/i);
+    if (com) {
+      const text = parseStringLiteral(stmt.slice(com.index + com[0].length));
+      if (text !== undefined) comments.push({ kind: com[1].toLowerCase(), target: com[2], text });
+    }
+  }
+
+  // attach COMMENT ON text to tables / columns (later statements win; IS NULL clears)
+  for (const c of comments) {
+    const parts = c.target.split('.').map(clean);
+    if (c.kind === 'table') {
+      const table = tables.get(parts[parts.length - 1].toLowerCase());
+      if (table) table.comment = c.text || null;
+    } else if (parts.length >= 2) {
+      const table = tables.get(parts[parts.length - 2].toLowerCase());
+      const column = table?.colIndex.get(parts[parts.length - 1].toLowerCase());
+      if (column) column.comment = c.text || null;
     }
   }
 
@@ -341,6 +365,17 @@ function parseForeignKey(text, base, fromTable) {
   const refStart = base + gi[0] + (dotIdx >= 0 ? dotIdx + 1 : 0);
   const localColSpans = colSpans(m[1], base + m.indices[1][0]);
   return { fromTable, fromCols, toTable, toCols, refSpan: [refStart, base + gi[1]], localColSpans };
+}
+
+// The value after IS in a COMMENT ON statement: NULL, or a (possibly
+// E-prefixed) single-quoted literal with '' escapes. Returns the text,
+// null for NULL, or undefined if unrecognised (e.g. dollar-quoted).
+function parseStringLiteral(text) {
+  text = text.trim();
+  if (/^null$/i.test(text)) return null;
+  const m = text.match(/^e?'((?:[^']|'')*)'$/i);
+  if (!m) return undefined;
+  return m[1].replace(/''/g, "'");
 }
 
 function prettyType(t) {
