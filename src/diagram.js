@@ -43,6 +43,7 @@ export class Diagram {
     this.selectedAnno = null;      // currently selected annotation
     this.annoDrag = null;          // annotation move
     this.annoResize = null;        // annotation resize
+    this.tooltipEl = null;         // DOM tooltip for table/column comments
 
     this._bindInput();
     this._loop = this._loop.bind(this);
@@ -69,6 +70,7 @@ export class Diagram {
     this.marquee = null;
     this.linking = null;
     this.hoverConn = null;
+    this._hideCommentTooltip();
     this.markDirty();
     if (!keepCamera) {/* caller may fit */}
   }
@@ -713,6 +715,7 @@ export class Diagram {
     c.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;   // ignore right/middle click (right-click = context menu)
       const r = c.getBoundingClientRect();
+      this._hideCommentTooltip();
       this._pointerDown(e.clientX - r.left, e.clientY - r.top, e.shiftKey);
       c.style.cursor = 'grabbing';
     });
@@ -720,17 +723,24 @@ export class Diagram {
     window.addEventListener('mousemove', (e) => {
       const r = c.getBoundingClientRect();
       const sx = e.clientX - r.left, sy = e.clientY - r.top;
-      if (this._pointerMove(sx, sy)) return;   // active drag/pan handled it
+      if (this._pointerMove(sx, sy)) { this._hideCommentTooltip(); return; }   // active drag/pan handled it
       // idle hover (mouse only)
       const t = this.tableAt(sx, sy);
       if (t !== this.hover) { this.hover = t; this.markDirty(); }
-      // connector dots on the hovered column row
+      // connector dots on the hovered column row; SQL comment tooltip on the
+      // hovered header (table comment) or row (column comment)
       let conn = null;
+      let comment = null;
       if (t) {
         const w = this.screenToWorld(sx, sy);
+        if (w.y - t.y < HEADER_H) comment = t.comment;
         const idx = Math.floor((w.y - t.y - HEADER_H) / ROW_H);
-        if (idx >= 0 && idx < t.columns.length) conn = { t, colIndex: idx };
+        if (idx >= 0 && idx < t.columns.length) {
+          conn = { t, colIndex: idx };
+          comment = t.columns[idx].comment;
+        }
       }
+      this._showCommentTooltip(comment, sx, sy);
       const changed = (conn?.t !== this.hoverConn?.t) || (conn?.colIndex !== this.hoverConn?.colIndex);
       if (changed) { this.hoverConn = conn; this.markDirty(); }
       if (this._connectorAt(sx, sy)) c.style.cursor = 'crosshair';
@@ -753,6 +763,7 @@ export class Diagram {
 
     c.addEventListener('touchstart', (e) => {
       this._cancelEdit();
+      this._hideCommentTooltip();
       if (e.touches.length === 1) {
         pinch = null;
         const p = tpos(e.touches[0]);
@@ -820,6 +831,7 @@ export class Diagram {
     c.addEventListener('wheel', (e) => {
       e.preventDefault();
       this._cancelEdit();
+      this._hideCommentTooltip();
       const r = c.getBoundingClientRect();
       const sx = e.clientX - r.left, sy = e.clientY - r.top;
       // ctrl/cmd or pinch => zoom; otherwise treat as zoom too (diagram tool)
@@ -1349,6 +1361,31 @@ export class Diagram {
     this.editing = null;
     input.remove();
     datalist?.remove();
+  }
+
+  // ---- comment tooltip (COMMENT ON table/column text, shown on hover) ----
+  _showCommentTooltip(text, sx, sy) {
+    if (!text || this.editing) { this._hideCommentTooltip(); return; }
+    let el = this.tooltipEl;
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'comment-tooltip';
+      this.canvas.parentElement.appendChild(el);
+      this.tooltipEl = el;
+    }
+    if (el.textContent !== text) el.textContent = text;
+    el.style.display = 'block';
+    // keep it inside the canvas box: clamp horizontally, flip above the
+    // cursor when there's no room below
+    const left = Math.max(8, Math.min(sx + 14, this.viewW - el.offsetWidth - 8));
+    const below = sy + 18;
+    const top = below + el.offsetHeight > this.viewH - 8 ? sy - el.offsetHeight - 12 : below;
+    el.style.left = left + 'px';
+    el.style.top = Math.max(8, top) + 'px';
+  }
+
+  _hideCommentTooltip() {
+    if (this.tooltipEl) this.tooltipEl.style.display = 'none';
   }
 
   _zoomAt(sx, sy, factor) {
