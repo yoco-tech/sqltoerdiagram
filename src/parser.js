@@ -214,7 +214,7 @@ export function parseSchema(sql) {
       const close = stmt.lastIndexOf(')');
       const body = stmt.slice(bodyStart, close > bodyStart ? close : undefined);
       const values = [...body.matchAll(/'((?:[^']|'')*)'/g)].map(v => v[1].replace(/''/g, "'"));
-      if (values.length) enums.set(bareName(em[1]).toLowerCase(), values);
+      if (values.length) { enums.set(bareName(em[1]).toLowerCase(), values); }
       continue;
     }
 
@@ -248,7 +248,7 @@ export function parseSchema(sql) {
         const bareType = bareName((column.typeRaw || '').replace(/\(.*$/s, '').trim())
           .replace(/\[\s*\]?$/, '').toLowerCase();
         const values = enums.get(bareType);
-        if (values) column.enumValues = values;
+        if (values) { column.enumValues = values; }
       }
     }
   }
@@ -411,7 +411,7 @@ function prettyType(t) {
   const paren = t.indexOf('(');
   const head = paren >= 0 ? t.slice(0, paren) : t;
   const dot = head.lastIndexOf('.');
-  if (dot >= 0) t = clean(t.slice(dot + 1));
+  if (dot >= 0) { t = clean(t.slice(dot + 1)); }
   const m = t.match(/^([a-zA-Z_]+)(.*)$/s);
   if (!m) return t.toLowerCase();
   return m[1].toLowerCase() + (m[2] || '').replace(/\s+/g, '');
