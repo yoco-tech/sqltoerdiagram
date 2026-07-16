@@ -733,7 +733,7 @@ export class Diagram {
       let tooltip = null;
       if (t) {
         const w = this.screenToWorld(sx, sy);
-        if (w.y - t.y < HEADER_H && t.comment) tooltip = { text: t.comment };
+        if (w.y - t.y < HEADER_H && t.comment) { tooltip = { text: t.comment }; }
         const idx = Math.floor((w.y - t.y - HEADER_H) / ROW_H);
         if (idx >= 0 && idx < t.columns.length) {
           conn = { t, colIndex: idx };
@@ -1382,7 +1382,7 @@ export class Diagram {
       this._tooltipKey = key;
       el.textContent = content.text || '';
       if (content.enumValues?.length) {
-        if (content.text) el.append('\n\n');
+        if (content.text) { el.append('\n\n'); }
         const typeName = document.createElement('strong');
         typeName.textContent = content.enumType;
         el.append(typeName, '\n' + content.enumValues.map(v => '• ' + v).join('\n'));

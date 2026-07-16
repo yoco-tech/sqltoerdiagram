@@ -96,7 +96,7 @@ function placeNewTables(model) {
   const missing = model.tables.filter(t => !Number.isFinite(t.x));
   if (!missing.length) return;
   const placed = model.tables.filter(t => Number.isFinite(t.x));
-  if (!placed.length) { layout(model, layoutOpts, diagram.hidden); return; }
+  if (!placed.length) { layout(model, layoutOpts, diagram.hidden, diagram.manualLinks); return; }
   let x1 = -Infinity, y0 = Infinity;
   for (const t of placed) { x1 = Math.max(x1, t.x + t.w); y0 = Math.min(y0, t.y); }
   let x = x1 + 80, y = Number.isFinite(y0) ? y0 : 40;
@@ -286,11 +286,13 @@ function rebuild({ arrange = false, restore = null } = {}) {
   let referenceSet = false;    // true once setReferenceCamera() has anchored diagram.referenceViewport
   let cameraRestored = false;  // true when a share payload's camera was applied verbatim
   if (arrange) {
-    layout(result, layoutOpts, diagram.hidden);
+    if (isEmbed) { diagram.inferLinks(); }           // embeds are read-only: infer without the button
+    layout(result, layoutOpts, diagram.hidden, diagram.manualLinks);
     diagram.fit();
   } else if (restore) {
     diagram.setHidden(restore.hidden);               // restore hidden tables before placing
     diagram.setManualLinks(restore.manualLinks);     // restore user-drawn / inferred links
+    if (isEmbed) { diagram.inferLinks(); }           // embeds are read-only: infer without the button
     placeNewTables(result);                          // tables not in the saved layout
     diagram.setAnnotations(sanitizeAnnotations(restore.annotations));
     if (restore.camera) {
@@ -302,7 +304,8 @@ function rebuild({ arrange = false, restore = null } = {}) {
       else { diagram.setCamera(c); cameraRestored = true; }
     } else diagram.fit();
   } else if (firstRender) {
-    layout(result, layoutOpts, diagram.hidden);
+    if (isEmbed) { diagram.inferLinks(); }           // embeds are read-only: infer without the button
+    layout(result, layoutOpts, diagram.hidden, diagram.manualLinks);
     diagram.fit();
   } else if (structureChanged) {
     placeNewTables(result);                          // keep manual layout, place only new tables

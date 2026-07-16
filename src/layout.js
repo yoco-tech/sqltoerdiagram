@@ -17,10 +17,14 @@ const PRESETS = {
   spacious:    { nodesep: 60, ranksep: 200, edgesep: 36 },
 };
 
-export function layout(model, opts = {}, hidden = null) {
+export function layout(model, opts = {}, hidden = null, manualLinks = []) {
   const dir = opts.dir === 'TB' ? 'TB' : 'LR';
   const preset = PRESETS[opts.spacing] || PRESETS.comfortable;
   const isHidden = (key) => !!(hidden && hidden.has(key));
+
+  // FK relations plus user-drawn / inferred manual links, as [fromKey, toKey]
+  const edges = model.relations.map(r => [r.fromTable.toLowerCase(), r.toTable.toLowerCase()]);
+  for (const l of manualLinks) edges.push([l.from.table, l.to.table]);
 
   // size every table from its content
   for (const t of model.tables) {
@@ -34,8 +38,7 @@ export function layout(model, opts = {}, hidden = null) {
   // degree map (how connected each table is) — drives hub-aware edge weighting
   const degree = new Map();
   const bump = (k) => degree.set(k, (degree.get(k) || 0) + 1);
-  for (const r of model.relations) {
-    const f = r.fromTable.toLowerCase(), t = r.toTable.toLowerCase();
+  for (const [f, t] of edges) {
     if (f !== t) { bump(f); bump(t); }
   }
 
@@ -57,9 +60,7 @@ export function layout(model, opts = {}, hidden = null) {
     g.setNode(t.key, { width: t.w, height: t.h });
   }
   let e = 0;
-  for (const r of model.relations) {
-    const from = r.fromTable.toLowerCase();
-    const to = r.toTable.toLowerCase();
+  for (const [from, to] of edges) {
     if (g.hasNode(from) && g.hasNode(to) && from !== to) {
       // edges touching a hub get more weight so spokes stay adjacent & aligned
       const hubness = Math.max(degree.get(from) || 0, degree.get(to) || 0);
@@ -81,7 +82,7 @@ export function layout(model, opts = {}, hidden = null) {
     }
   }
 
-  placeOrphans(model, isHidden);
+  placeOrphans(model, edges, isHidden);
   removeOverlaps(model, isHidden);
 }
 
@@ -122,12 +123,12 @@ export function removeOverlaps(model, isHidden = null) {
 
 // Tables with no relations get packed into a compact grid beside the graph,
 // rather than a single tall column that wastes space.
-function placeOrphans(model, isHidden = null) {
+function placeOrphans(model, edges, isHidden = null) {
   const hid = (k) => !!(isHidden && isHidden(k));
   const connected = new Set();
-  for (const r of model.relations) {
-    connected.add(r.fromTable.toLowerCase());
-    connected.add(r.toTable.toLowerCase());
+  for (const [f, t] of edges) {
+    connected.add(f);
+    connected.add(t);
   }
   const orphans = model.tables.filter(t => !hid(t.key) && (!connected.has(t.key) || !Number.isFinite(t.x)));
   if (!orphans.length) return;
