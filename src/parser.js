@@ -143,6 +143,7 @@ export function parseSchema(sql) {
   const relations = [];
   const errors = [];
   const comments = [];        // {kind: 'table'|'column', target, text|null}
+  const enums = new Map();    // lowerBareTypeName -> [values]
 
   const ensureTable = (name, nameSpan) => {
     const key = name.toLowerCase();
@@ -204,6 +205,19 @@ export function parseSchema(sql) {
       continue;
     }
 
+    // CREATE TYPE x AS ENUM ('a', 'b', ...) (PostgreSQL). Collected so enum
+    // columns can show their possible values; applied after the loop so the
+    // CREATE TYPE / CREATE TABLE order doesn't matter.
+    const em = stmt.match(/create\s+type\s+(\S+)\s+as\s+enum\s*\(/i);
+    if (em) {
+      const bodyStart = em.index + em[0].length;
+      const close = stmt.lastIndexOf(')');
+      const body = stmt.slice(bodyStart, close > bodyStart ? close : undefined);
+      const values = [...body.matchAll(/'((?:[^']|'')*)'/g)].map(v => v[1].replace(/''/g, "'"));
+      if (values.length) enums.set(bareName(em[1]).toLowerCase(), values);
+      continue;
+    }
+
     // COMMENT ON TABLE x IS '...' / COMMENT ON COLUMN x.y IS '...' (PostgreSQL).
     // Collected and applied after the loop so ordering vs CREATE TABLE doesn't
     // matter and comments on unknown tables don't create phantom tables.
@@ -224,6 +238,18 @@ export function parseSchema(sql) {
       const table = tables.get(parts[parts.length - 2].toLowerCase());
       const column = table?.colIndex.get(parts[parts.length - 1].toLowerCase());
       if (column) column.comment = c.text || null;
+    }
+  }
+
+  // attach enum values to columns whose type matches a CREATE TYPE ... AS ENUM
+  if (enums.size) {
+    for (const table of tables.values()) {
+      for (const column of table.columns) {
+        const bareType = bareName((column.typeRaw || '').replace(/\(.*$/s, '').trim())
+          .replace(/\[\s*\]?$/, '').toLowerCase();
+        const values = enums.get(bareType);
+        if (values) column.enumValues = values;
+      }
     }
   }
 
@@ -248,7 +274,7 @@ export function parseSchema(sql) {
     });
   }
 
-  return { tables: tableList, relations: resolved, errors, sql: original };
+  return { tables: tableList, relations: resolved, errors, sql: original, enums };
 }
 
 function parseTableBody(body, base, table, relations) {
@@ -380,6 +406,12 @@ function parseStringLiteral(text) {
 
 function prettyType(t) {
   if (!t) return '';
+  // display the bare type name (public.account_category -> account_category);
+  // typeRaw/typeSpan keep the qualified form so canvas edits splice correctly
+  const paren = t.indexOf('(');
+  const head = paren >= 0 ? t.slice(0, paren) : t;
+  const dot = head.lastIndexOf('.');
+  if (dot >= 0) t = clean(t.slice(dot + 1));
   const m = t.match(/^([a-zA-Z_]+)(.*)$/s);
   if (!m) return t.toLowerCase();
   return m[1].toLowerCase() + (m[2] || '').replace(/\s+/g, '');
