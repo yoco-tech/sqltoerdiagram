@@ -730,17 +730,20 @@ export class Diagram {
       // connector dots on the hovered column row; SQL comment tooltip on the
       // hovered header (table comment) or row (column comment)
       let conn = null;
-      let comment = null;
+      let tooltip = null;
       if (t) {
         const w = this.screenToWorld(sx, sy);
-        if (w.y - t.y < HEADER_H) comment = t.comment;
+        if (w.y - t.y < HEADER_H && t.comment) tooltip = { text: t.comment };
         const idx = Math.floor((w.y - t.y - HEADER_H) / ROW_H);
         if (idx >= 0 && idx < t.columns.length) {
           conn = { t, colIndex: idx };
-          comment = t.columns[idx].comment;
+          const col = t.columns[idx];
+          tooltip = (col.comment || col.enumValues?.length)
+            ? { text: col.comment, enumType: col.type, enumValues: col.enumValues }
+            : null;
         }
       }
-      this._showCommentTooltip(comment, sx, sy);
+      this._showCommentTooltip(tooltip, sx, sy);
       const changed = (conn?.t !== this.hoverConn?.t) || (conn?.colIndex !== this.hoverConn?.colIndex);
       if (changed) { this.hoverConn = conn; this.markDirty(); }
       if (this._connectorAt(sx, sy)) c.style.cursor = 'crosshair';
@@ -1363,9 +1366,10 @@ export class Diagram {
     datalist?.remove();
   }
 
-  // ---- comment tooltip (COMMENT ON table/column text, shown on hover) ----
-  _showCommentTooltip(text, sx, sy) {
-    if (!text || this.editing) { this._hideCommentTooltip(); return; }
+  // ---- comment tooltip (COMMENT ON text and/or enum values, shown on hover) ----
+  // content: { text?, enumType?, enumValues? }
+  _showCommentTooltip(content, sx, sy) {
+    if (!content || this.editing) { this._hideCommentTooltip(); return; }
     let el = this.tooltipEl;
     if (!el) {
       el = document.createElement('div');
@@ -1373,7 +1377,17 @@ export class Diagram {
       this.canvas.parentElement.appendChild(el);
       this.tooltipEl = el;
     }
-    if (el.textContent !== text) el.textContent = text;
+    const key = JSON.stringify(content);
+    if (this._tooltipKey !== key) {
+      this._tooltipKey = key;
+      el.textContent = content.text || '';
+      if (content.enumValues?.length) {
+        if (content.text) el.append('\n\n');
+        const typeName = document.createElement('strong');
+        typeName.textContent = content.enumType;
+        el.append(typeName, '\n' + content.enumValues.map(v => '• ' + v).join('\n'));
+      }
+    }
     el.style.display = 'block';
     // keep it inside the canvas box: clamp horizontally, flip above the
     // cursor when there's no room below
