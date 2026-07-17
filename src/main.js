@@ -517,7 +517,6 @@ for (const [key, d] of Object.entries(DIALECTS)) {
   const b = document.createElement('button');
   b.className = 'menu-item';
   b.dataset.dialect = key;
-  b.dataset.umamiEvent = 'dialect-' + key;
   b.textContent = d.label;
   dialectMenu.appendChild(b);
 }
@@ -584,7 +583,7 @@ function downloadText(filename, text, mime) {
 
 // Reusable "here's some text — copy or download it" modal (export code, embed snippet).
 let _modal = null;
-function showCodeModal(title, text, filename, umamiLabel) {
+function showCodeModal(title, text, filename) {
   if (!_modal) {
     _modal = document.createElement('div');
     _modal.className = 'modal';
@@ -610,7 +609,6 @@ function showCodeModal(title, text, filename, umamiLabel) {
   _modal.querySelector('.modal-hint').textContent = filename ? filename : '';
   ta.value = text;
   copyBtn.textContent = 'Copy';
-  if (umamiLabel) copyBtn.setAttribute('data-umami-event', 'copy-' + umamiLabel);
   copyBtn.onclick = async () => {
     try { await navigator.clipboard.writeText(ta.value); copyBtn.textContent = 'Copied ✓'; }
     catch { ta.select(); document.execCommand && document.execCommand('copy'); copyBtn.textContent = 'Copied ✓'; }
@@ -646,7 +644,7 @@ exportMenu.addEventListener('click', (e) => {
   const s = SERIALIZERS[kind];
   if (!s) return;
   const text = serialize(diagram.model, kind);
-  showCodeModal(`Export — ${s.label}`, text, `schema.${s.ext}`, s.label.toLowerCase());
+  showCodeModal(`Export — ${s.label}`, text, `schema.${s.ext}`);
 });
 document.addEventListener('click', () => { exportMenu.hidden = true; });
 
@@ -702,7 +700,7 @@ $('btn-embed').addEventListener('click', async () => {
     `<iframe src="${src}" width="100%" loading="lazy"\n` +
     `        style="border:1px solid #e5e7eb;border-radius:10px;aspect-ratio:${w}/${h}"\n` +
     `        title="ER diagram"></iframe>`;
-  showCodeModal('Embed this diagram', snippet, null, 'embed');
+  showCodeModal('Embed this diagram', snippet, null);
 });
 
 const fileInput = $('file-open');
@@ -780,9 +778,9 @@ if (isEmbed) {
   brand.href = location.origin + location.pathname + location.hash; // open full editor, same diagram
   brand.title = 'Open in SQL to ER Diagram';
   brand.innerHTML =
+    'Open schema' +
     '<span class="logo" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-    '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg></span>' +
-    'sqltoerdiagram.com';
+    '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></span>';
   document.querySelector('.canvas-pane').appendChild(brand);
 }
 

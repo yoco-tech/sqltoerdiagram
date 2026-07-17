@@ -60,8 +60,6 @@
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
 
-  <!-- Umami: privacy-friendly, cookieless analytics (anonymous page views only; never sees your SQL/schema) -->
-  <script defer src="https://cloud.umami.is/script.js" data-website-id="27b5b4ba-93ad-4ef3-aaa0-af516881d308"></script>
 </head>
 <body>
   <h1 class="sr-only">SQL to ER Diagram — free online ERD generator: convert a SQL schema (CREATE TABLE statements) into an interactive entity-relationship diagram in your browser. Turn SQL into a diagram instantly, no signup.</h1>
@@ -78,17 +76,17 @@
 
     <div class="actions">
       <div class="menu-wrap">
-        <button id="btn-format" class="btn ghost caret" title="Input format (SQL · Prisma · DBML · Mermaid · PlantUML · SQLAlchemy · Sequelize)" data-umami-event="format-menu">Auto</button>
+        <button id="btn-format" class="btn ghost caret" title="Input format (SQL · Prisma · DBML · Mermaid · PlantUML · SQLAlchemy · Sequelize)">Auto</button>
         <div id="format-menu" class="menu" hidden></div>
       </div>
       <div class="menu-wrap" id="dialect-wrap">
-        <button id="btn-dialect" class="btn ghost caret" title="Target SQL dialect" data-umami-event="dialect-menu">PostgreSQL</button>
+        <button id="btn-dialect" class="btn ghost caret" title="Target SQL dialect">PostgreSQL</button>
         <div id="dialect-menu" class="menu" hidden></div>
       </div>
       <span class="divider"></span>
-      <button id="btn-example" class="btn ghost" title="Load a sample schema" data-umami-event="load-example">Example</button>
+      <button id="btn-example" class="btn ghost" title="Load a sample schema">Example</button>
       <div class="menu-wrap">
-        <button id="btn-arrange" class="btn ghost caret" title="Auto-arrange tables" data-umami-event="arrange">Arrange</button>
+        <button id="btn-arrange" class="btn ghost caret" title="Auto-arrange tables">Arrange</button>
         <div id="arrange-menu" class="menu" hidden>
           <div class="menu-label">Direction</div>
           <button class="menu-item" data-dir="LR">Horizontal&nbsp;→</button>
@@ -100,17 +98,17 @@
           <button class="menu-item" data-spacing="spacious">Spacious</button>
         </div>
       </div>
-      <button id="btn-fit" class="btn ghost" title="Fit diagram to screen" data-umami-event="fit">Fit</button>
-      <button id="btn-infer" class="btn ghost" title="Auto-detect relationships by column name (for schemas without foreign keys)" data-umami-event="infer-links">Infer links</button>
+      <button id="btn-fit" class="btn ghost" title="Fit diagram to screen">Fit</button>
+      <button id="btn-infer" class="btn ghost" title="Auto-detect relationships by column name (for schemas without foreign keys)">Infer links</button>
       <span class="divider"></span>
-      <button id="btn-open" class="btn ghost" title="Open a saved project (.json)" data-umami-event="open-project">Open</button>
-      <button id="btn-save" class="btn ghost" title="Save SQL + layout to a file" data-umami-event="save-project">Save</button>
-      <button id="btn-share" class="btn ghost" title="Copy a shareable link — the diagram is encoded in the URL, nothing is stored on a server" data-umami-event="share-link">Share</button>
+      <button id="btn-open" class="btn ghost" title="Open a saved project (.json)">Open</button>
+      <button id="btn-save" class="btn ghost" title="Save SQL + layout to a file">Save</button>
+      <button id="btn-share" class="btn ghost" title="Copy a shareable link — the diagram is encoded in the URL, nothing is stored on a server">Share</button>
       <input id="file-open" type="file" accept=".json,application/json" hidden />
-      <button id="btn-embed" class="btn ghost" title="Get an &lt;iframe&gt; snippet to embed this diagram (read-only, live)" data-umami-event="embed">Embed</button>
+      <button id="btn-embed" class="btn ghost" title="Get an &lt;iframe&gt; snippet to embed this diagram (read-only, live)">Embed</button>
       <span class="divider"></span>
       <div class="menu-wrap">
-        <button id="btn-export" class="btn ghost caret" title="Export the diagram (image or code)" data-umami-event="export-menu">Export</button>
+        <button id="btn-export" class="btn ghost caret" title="Export the diagram (image or code)">Export</button>
         <div id="export-menu" class="menu" hidden>
           <div class="menu-label">Image</div>
           <button class="menu-item" data-export="png">PNG</button>
@@ -124,12 +122,12 @@
       </div>
       <span class="divider"></span>
       <a id="link-github" class="btn ghost icon" href="https://github.com/royalbhati/sqltoerdiagram" target="_blank" rel="noopener noreferrer"
-         title="View source on GitHub — SQL to ER Diagram is open source" aria-label="GitHub repository" data-umami-event="github">
+         title="View source on GitHub — SQL to ER Diagram is open source" aria-label="GitHub repository">
         <svg class="ico" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
           <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
         </svg>
       </a>
-      <button id="btn-theme" class="btn ghost icon" title="Toggle light / dark" aria-label="Toggle theme" data-umami-event="toggle-theme">
+      <button id="btn-theme" class="btn ghost icon" title="Toggle light / dark" aria-label="Toggle theme">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/>
         </svg>
@@ -144,7 +142,7 @@
           <span class="pane-title">SQL schema</span>
           <span id="status" class="status"></span>
         </div>
-        <button id="btn-collapse-sql" class="icon-btn" title="Hide SQL panel" aria-label="Hide SQL panel" data-umami-event="hide-sql">
+        <button id="btn-collapse-sql" class="icon-btn" title="Hide SQL panel" aria-label="Hide SQL panel">
           <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>
           </svg>
@@ -162,7 +160,7 @@
     <section class="canvas-pane">
       <canvas id="canvas"></canvas>
 
-      <button id="btn-open-sql" class="reopen-sql" title="Show SQL panel" aria-label="Show SQL panel" data-umami-event="show-sql">
+      <button id="btn-open-sql" class="reopen-sql" title="Show SQL panel" aria-label="Show SQL panel">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>
         </svg>
@@ -173,7 +171,7 @@
         <div class="empty-card">
           <h2>Paste SQL, see the schema.</h2>
           <p>Drop your <code>CREATE TABLE</code> statements on the left. Drag tables, scroll to zoom, double-click to rename, export when done.</p>
-          <button id="btn-example2" class="btn primary" data-umami-event="load-example-empty">Load example schema</button>
+          <button id="btn-example2" class="btn primary">Load example schema</button>
           <p class="privacy">
             <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -184,17 +182,17 @@
       </div>
 
       <div class="tables-toggle">
-        <button id="btn-tables" class="btn ghost" title="Search, select and hide tables" data-umami-event="tables-panel">Tables</button>
+        <button id="btn-tables" class="btn ghost" title="Search, select and hide tables">Tables</button>
       </div>
 
       <div class="tool-palette">
-        <button id="tool-note" class="btn ghost tool" title="Add a sticky note" data-umami-event="add-note">
+        <button id="tool-note" class="btn ghost tool" title="Add a sticky note">
           <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M15 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8l6-6V6a2 2 0 0 0-2-2Z"/><path d="M14 20v-5a1 1 0 0 1 1-1h5"/>
           </svg>
           <span>Note</span>
         </button>
-        <button id="tool-group" class="btn ghost tool" title="Add a group box" data-umami-event="add-group">
+        <button id="tool-group" class="btn ghost tool" title="Add a group box">
           <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3">
             <rect x="3" y="4" width="18" height="16" rx="2"/>
           </svg>
