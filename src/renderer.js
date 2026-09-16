@@ -11,6 +11,7 @@ const ROW_H = 26;
 const HEADER_H = 34;
 const PAD_X = 12;
 const GAP = 14;          // gap between name and type columns
+const SCHEMA_GAP = 8;    // gap between table name and its schema suffix
 const BADGE_W = 30;      // space reserved for PK/FK badges
 const MIN_W = 140;
 const MAX_W = 360;
@@ -59,10 +60,47 @@ function measureCtx() {
   return measureCanvas.getContext('2d');
 }
 
+// Tables in the default schema read as unqualified, so only a non-public
+// schema is worth the header space.
+export function schemaLabel(t) {
+  const schema = t.schema;
+  if (!schema || schema.toLowerCase() === 'public') return null;
+  return schema;
+}
+
+// Name and schema sit on a shared alphabetic baseline. Centring each on the
+// header midline instead ('middle') would leave the smaller schema text a few
+// pixels high, since canvas centres every string on its own em box.
+export function headerTextLayout(t, w) {
+  const ctx = measureCtx();
+  const schema = schemaLabel(t);
+  ctx.font = TYPE_FONT;
+  const schemaReserve = schema ? ctx.measureText(schema).width + SCHEMA_GAP : 0;
+
+  ctx.font = HEADER_FONT;
+  const name = truncate(ctx, t.name, w - PAD_X * 2 - 18 - schemaReserve);
+  const metrics = ctx.measureText(name);
+  const ascent = metrics.fontBoundingBoxAscent ?? 10;
+  const descent = metrics.fontBoundingBoxDescent ?? 3;
+
+  return {
+    name,
+    schema,
+    baselineY: HEADER_H / 2 + 1 + (ascent - descent) / 2,
+    schemaX: PAD_X + metrics.width + SCHEMA_GAP,
+  };
+}
+
 export function measureTable(t) {
   const ctx = measureCtx();
   ctx.font = HEADER_FONT;
   let w = ctx.measureText(t.name).width + PAD_X * 2 + 24;
+  const schema = schemaLabel(t);
+  if (schema) {
+    ctx.font = TYPE_FONT;
+    w += ctx.measureText(schema).width + SCHEMA_GAP;
+    ctx.font = HEADER_FONT;
+  }
   ctx.font = FONT_STACK;
   for (const c of t.columns) {
     const nameW = ctx.measureText(c.name).width;
@@ -108,10 +146,17 @@ export function rasterizeTable(t, theme, dpr) {
   ctx.fillRect(0, 0, w, HEADER_H);
   ctx.restore();
 
+  const header = headerTextLayout(t, w);
+  ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = theme.headerText;
   ctx.font = HEADER_FONT;
-  ctx.textBaseline = 'middle';
-  ctx.fillText(truncate(ctx, t.name, w - PAD_X * 2 - 18), PAD_X, HEADER_H / 2 + 1);
+  ctx.fillText(header.name, PAD_X, header.baselineY);
+
+  if (header.schema) {
+    ctx.font = TYPE_FONT;
+    ctx.fillStyle = theme.typeText;
+    ctx.fillText(header.schema, header.schemaX, header.baselineY);
+  }
 
   // header divider
   ctx.strokeStyle = theme.divider;

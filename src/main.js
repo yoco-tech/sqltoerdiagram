@@ -286,13 +286,13 @@ function rebuild({ arrange = false, restore = null } = {}) {
   let referenceSet = false;    // true once setReferenceCamera() has anchored diagram.referenceViewport
   let cameraRestored = false;  // true when a share payload's camera was applied verbatim
   if (arrange) {
-    if (isEmbed) { diagram.inferLinks(); }           // embeds are read-only: infer without the button
+    diagram.inferLinks();                            // auto-infer; dedupes against FKs and manual links
     layout(result, layoutOpts, diagram.hidden, diagram.manualLinks);
     diagram.fit();
   } else if (restore) {
     diagram.setHidden(restore.hidden);               // restore hidden tables before placing
     diagram.setManualLinks(restore.manualLinks);     // restore user-drawn / inferred links
-    if (isEmbed) { diagram.inferLinks(); }           // embeds are read-only: infer without the button
+    diagram.inferLinks();                            // auto-infer; dedupes against FKs and manual links
     placeNewTables(result);                          // tables not in the saved layout
     diagram.setAnnotations(sanitizeAnnotations(restore.annotations));
     if (restore.camera) {
@@ -304,10 +304,11 @@ function rebuild({ arrange = false, restore = null } = {}) {
       else { diagram.setCamera(c); cameraRestored = true; }
     } else diagram.fit();
   } else if (firstRender) {
-    if (isEmbed) { diagram.inferLinks(); }           // embeds are read-only: infer without the button
+    diagram.inferLinks();                            // auto-infer; dedupes against FKs and manual links
     layout(result, layoutOpts, diagram.hidden, diagram.manualLinks);
     diagram.fit();
   } else if (structureChanged) {
+    diagram.inferLinks();                            // auto-infer; dedupes against FKs and manual links
     placeNewTables(result);                          // keep manual layout, place only new tables
   }
 

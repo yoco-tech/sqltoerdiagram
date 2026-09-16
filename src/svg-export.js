@@ -1,5 +1,5 @@
 // Build a standalone SVG string of the current diagram (vector, theme-aware).
-import { THEMES, columnY, ROW_H, HEADER_H } from './renderer.js';
+import { THEMES, columnY, headerTextLayout, ROW_H, HEADER_H } from './renderer.js';
 import { NOTE_COLORS, GROUP_COLORS } from './annotations.js';
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -69,7 +69,11 @@ export function exportSVG(model, themeName, annotations = [], hidden = null) {
     // header
     g.push(`<path d="M0 ${HEADER_H} V10 a10 10 0 0 1 10 -10 H${t.w - 10} a10 10 0 0 1 10 10 V${HEADER_H} Z" fill="${theme.header}"/>`);
     g.push(`<line x1="0" y1="${HEADER_H}" x2="${t.w}" y2="${HEADER_H}" stroke="${theme.divider}"/>`);
-    g.push(`<text x="12" y="${HEADER_H / 2}" dominant-baseline="middle" font-weight="600" font-size="14" fill="${theme.headerText}">${esc(t.name)}</text>`);
+    const header = headerTextLayout(t, t.w);
+    g.push(`<text x="12" y="${header.baselineY}" font-weight="600" font-size="14" fill="${theme.headerText}">${esc(header.name)}</text>`);
+    if (header.schema) {
+      g.push(`<text x="${header.schemaX}" y="${header.baselineY}" font-size="12" font-family="ui-monospace, Menlo, monospace" fill="${theme.typeText}">${esc(header.schema)}</text>`);
+    }
 
     for (let i = 0; i < t.columns.length; i++) {
       const c = t.columns[i];

@@ -77,6 +77,11 @@ function bareName(id) {
   const parts = id.split('.');
   return clean(parts[parts.length - 1]);
 }
+// Qualifier directly before the bare name ("db.sales.orders" -> "sales").
+function schemaName(id) {
+  const parts = id.split('.');
+  return parts.length > 1 ? clean(parts[parts.length - 2]) : null;
+}
 
 // Tokenise a definition; each token carries absolute start/end offsets.
 function tokenize(def, base) {
@@ -145,12 +150,18 @@ export function parseSchema(sql) {
   const comments = [];        // {kind: 'table'|'column', target, text|null}
   const enums = new Map();    // lowerBareTypeName -> [values]
 
-  const ensureTable = (name, nameSpan) => {
+  const ensureTable = (name, nameSpan, schema = null) => {
     const key = name.toLowerCase();
     if (!tables.has(key)) {
-      tables.set(key, { name, key, columns: [], colIndex: new Map(), colRefs: [], nameSpan, bodySpan: null });
-    } else if (nameSpan && !tables.get(key).nameSpan) {
-      tables.get(key).nameSpan = nameSpan;
+      tables.set(key, { name, key, schema, columns: [], colIndex: new Map(), colRefs: [], nameSpan, bodySpan: null });
+    } else {
+      const existing = tables.get(key);
+      if (nameSpan && !existing.nameSpan) {
+        existing.nameSpan = nameSpan;
+      }
+      if (schema && !existing.schema) {
+        existing.schema = schema;
+      }
     }
     return tables.get(key);
   };
@@ -176,6 +187,7 @@ export function parseSchema(sql) {
       const dotIdx = rawName.lastIndexOf('.');
       const bareStart = nameLocal + (dotIdx >= 0 ? dotIdx + 1 : 0);
       const name = bareName(rawName);
+      const schema = schemaName(rawName);
       const nameSpan = [base + bareStart, base + nameLocal + rawName.length];
 
       // balanced body
@@ -187,7 +199,7 @@ export function parseSchema(sql) {
       if (end < 0) { errors.push(`Unbalanced parens in table "${name}"`); continue; }
       const bodyLocal = afterStart + open + 1;
       const body = after.slice(open + 1, end);
-      const table = ensureTable(name, nameSpan);
+      const table = ensureTable(name, nameSpan, schema);
       table.bodySpan = [base + bodyLocal, base + afterStart + end];
       parseTableBody(body, base + bodyLocal, table, relations);
       continue;
