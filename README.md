@@ -31,6 +31,9 @@ leaving your browser.
   highlight just its relationships, **click** to pin focus (fades every unrelated
   table and line), click empty space to clear.
 - **Drag** tables, **scroll / pinch to zoom**, and pan.
+- **Required vs nullable**: a nullable column's type carries a trailing `?`
+  (`varchar(255)?`) — `NOT NULL` and primary-key columns are unmarked. Input formats
+  that can't express nullability (Mermaid, PlantUML, BigQuery) show no marker at all.
 
 ### Smart layout
 

@@ -153,7 +153,7 @@ export function parseSchema(sql) {
   const ensureTable = (name, nameSpan, schema = null) => {
     const key = name.toLowerCase();
     if (!tables.has(key)) {
-      tables.set(key, { name, key, schema, columns: [], colIndex: new Map(), colRefs: [], nameSpan, bodySpan: null });
+      tables.set(key, { name, key, schema, columns: [], colIndex: new Map(), colRefs: [], nullabilityKnown: true, nameSpan, bodySpan: null });
     } else {
       const existing = tables.get(key);
       if (nameSpan && !existing.nameSpan) {

@@ -25,6 +25,7 @@ export function parsePlantUML(text) {
     if (!b) continue;
     const body = t.slice(b[0], b[1]);
     const table = makeTable(name);
+    table.nullabilityKnown = false;
     for (let line of body.split('\n')) {
       line = line.trim();
       if (!line || /^(--+|==+|\.\.+)$/.test(line)) continue; // separators
@@ -40,7 +41,7 @@ export function parsePlantUML(text) {
       const colName = unq((cm ? cm[1] : clean).trim());
       const type = cm ? cm[2].trim() : '';
       if (!colName) continue;
-      addColumn(table, { name: colName, type, pk, unique: false, nn: pk });
+      addColumn(table, { name: colName, type, pk, unique: false });
       if (fk) { const c = table.colIndex.get(colName.toLowerCase()); if (c) c.fk = true; }
     }
     tables.push(table);

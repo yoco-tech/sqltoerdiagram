@@ -1,5 +1,5 @@
 // Build a standalone SVG string of the current diagram (vector, theme-aware).
-import { THEMES, columnY, headerTextLayout, ROW_H, HEADER_H } from './renderer.js';
+import { THEMES, columnY, headerTextLayout, typeLabel, ROW_H, HEADER_H } from './renderer.js';
 import { NOTE_COLORS, GROUP_COLORS } from './annotations.js';
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -83,7 +83,8 @@ export function exportSVG(model, themeName, annotations = [], hidden = null) {
       if (c.pk) g.push(`<text x="10" y="${cy}" dominant-baseline="middle" font-size="9" font-weight="700" fill="${theme.pk}">PK</text>`);
       else if (c.fk) g.push(`<text x="10" y="${cy}" dominant-baseline="middle" font-size="9" font-weight="700" fill="${theme.fk}">FK</text>`);
       g.push(`<text x="38" y="${cy}" dominant-baseline="middle" font-size="13" font-family="ui-monospace, Menlo, monospace" fill="${theme.rowText}">${esc(c.name)}</text>`);
-      if (c.type) g.push(`<text x="${t.w - 12}" y="${cy}" dominant-baseline="middle" text-anchor="end" font-size="12" font-family="ui-monospace, Menlo, monospace" fill="${theme.typeText}">${esc(c.type)}</text>`);
+      const type = typeLabel(t, c);
+      if (type) g.push(`<text x="${t.w - 12}" y="${cy}" dominant-baseline="middle" text-anchor="end" font-size="12" font-family="ui-monospace, Menlo, monospace" fill="${theme.typeText}">${esc(type)}</text>`);
     }
     g.push('</g>');
     parts.push(g.join(''));

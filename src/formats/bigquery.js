@@ -161,6 +161,7 @@ export function parseBigQuery(sql) {
       columns: cols,
       colIndex: new Map(cols.map(c => [c.name.toLowerCase(), c])),
       colRefs: [],
+      nullabilityKnown: false,
       nameSpan: null,
       bodySpan: null,
     };

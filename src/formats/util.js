@@ -3,8 +3,10 @@
 // them into the same normalized shape the diagram consumes (no source spans —
 // these formats are parse-only / view-only).
 
+// nullabilityKnown: false for formats with no way to say NOT NULL — the
+// diagram then marks nothing rather than calling every column nullable.
 export function makeTable(name) {
-  return { name, key: name.toLowerCase(), columns: [], colIndex: new Map(), colRefs: [], nameSpan: null, bodySpan: null };
+  return { name, key: name.toLowerCase(), columns: [], colIndex: new Map(), colRefs: [], nullabilityKnown: true, nameSpan: null, bodySpan: null };
 }
 
 export function addColumn(table, col) {

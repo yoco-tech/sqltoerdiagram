@@ -60,6 +60,19 @@ function measureCtx() {
   return measureCanvas.getContext('2d');
 }
 
+// Real schemas are mostly NOT NULL, so the diagram marks the exception: a
+// nullable column's type gets a trailing '?'. PKs are implicitly NOT NULL, and
+// formats that cannot express nullability opt out, so an unmarked column is
+// never a claim the source didn't make.
+export function isNullable(t, c) {
+  return !c.pk && !c.nn && t.nullabilityKnown !== false;
+}
+
+export function typeLabel(t, c) {
+  if (!c.type) return '';
+  return isNullable(t, c) ? c.type + '?' : c.type;
+}
+
 // Tables in the default schema read as unqualified, so only a non-public
 // schema is worth the header space.
 export function schemaLabel(t) {
@@ -105,7 +118,7 @@ export function measureTable(t) {
   for (const c of t.columns) {
     const nameW = ctx.measureText(c.name).width;
     ctx.font = TYPE_FONT;
-    const typeW = ctx.measureText(c.type || '').width;
+    const typeW = ctx.measureText(typeLabel(t, c)).width;
     ctx.font = FONT_STACK;
     const total = BADGE_W + nameW + GAP + typeW + PAD_X * 2;
     if (total > w) w = total;
@@ -180,12 +193,13 @@ export function rasterizeTable(t, theme, dpr) {
     }
 
     const nx = PAD_X + BADGE_W - 4;
+    const marker = isNullable(t, c) ? '?' : '';
     // reserve only the space the type actually needs (not a fixed amount),
     // so short types don't force the column name to truncate
     let typeReserve = 0;
     if (c.type) {
       ctx.font = TYPE_FONT;
-      typeReserve = Math.min(ctx.measureText(c.type).width, 120) + GAP;
+      typeReserve = Math.min(ctx.measureText(c.type + marker).width, 120) + GAP;
     }
     ctx.font = FONT_STACK;
     ctx.fillStyle = theme.rowText;
@@ -196,7 +210,9 @@ export function rasterizeTable(t, theme, dpr) {
       ctx.font = TYPE_FONT;
       ctx.fillStyle = theme.typeText;
       ctx.textAlign = 'right';
-      ctx.fillText(truncate(ctx, c.type, 120), w - PAD_X, y);
+      // truncate the type alone, so a long one never swallows the marker
+      const room = 120 - ctx.measureText(marker).width;
+      ctx.fillText(truncate(ctx, c.type, room) + marker, w - PAD_X, y);
       ctx.textAlign = 'left';
     }
   }

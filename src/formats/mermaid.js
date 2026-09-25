@@ -24,6 +24,7 @@ export function parseMermaid(text) {
     if (!b) continue;
     const body = t.slice(b[0], b[1]);
     const table = makeTable(name);
+    table.nullabilityKnown = false;
     for (let line of body.split('\n')) {
       line = line.trim();
       if (!line) continue;
@@ -38,7 +39,6 @@ export function parseMermaid(text) {
         type,
         pk: /\bPK\b/.test(rest),
         unique: /\bUK\b/.test(rest),
-        nn: false,
       });
       if (/\bFK\b/.test(rest)) { const c = table.colIndex.get(colName.toLowerCase()); if (c) c.fk = true; }
     }
