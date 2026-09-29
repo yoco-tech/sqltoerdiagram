@@ -1,6 +1,6 @@
 
 export function relationCardinality(rel, byKey) {
-  const fromT = byKey.get(rel.fromTable.toLowerCase());
+  const fromT = byKey.get(rel.fromKey ?? rel.fromTable.toLowerCase());
   const fcName = rel.fromCols && rel.fromCols[0];
   const fromCol = fromT && fcName
     ? fromT.columns.find(c => c.name.toLowerCase() === String(fcName).toLowerCase())

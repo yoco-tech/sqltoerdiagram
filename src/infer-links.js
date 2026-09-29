@@ -25,7 +25,7 @@ export function inferLinks(model, existing = []) {
   const seen = new Set();
   const ek = (a, c, b, d) => `${a}.${(c || '').toLowerCase()}->${b}.${(d || '').toLowerCase()}`;
   for (const r of model.relations || []) {
-    seen.add(ek(r.fromTable.toLowerCase(), r.fromCols[0] || '', r.toTable.toLowerCase(), r.toCols[0] || ''));
+    seen.add(ek(r.fromKey ?? r.fromTable.toLowerCase(), r.fromCols[0] || '', r.toKey ?? r.toTable.toLowerCase(), r.toCols[0] || ''));
   }
   for (const l of existing) {
     if (l.from) seen.add(ek(l.from.table, l.from.col, l.to.table, l.to.col));

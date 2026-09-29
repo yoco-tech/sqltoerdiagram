@@ -9,10 +9,10 @@
     "sql-to-er-diagram": "./bin/cli.js"
   },
   "scripts": {
+    "test": "node --test",
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "test": "node test/edit.test.mjs"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.4"

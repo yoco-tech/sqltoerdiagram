@@ -140,6 +140,7 @@ a.btn { text-decoration: none; color: var(--text); }
 }
 .modal-actions { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }
 .modal-hint { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modal-note { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); }
 
 /* floating "Tables" toggle (top-right, mirrors the zoom/tool-palette pills) */
 .tables-toggle {
@@ -244,6 +245,7 @@ a.btn { text-decoration: none; color: var(--text); }
   z-index: 50;
 }
 .menu[hidden] { display: none; }
+.seg[hidden], .btn[hidden], .menu-item[hidden], .menu-wrap[hidden] { display: none; }
 /* opens upward — for menus anchored to a bottom-of-screen control pill */
 .menu.up { top: auto; bottom: calc(100% + 6px); }
 .menu-label {
@@ -287,7 +289,6 @@ a.btn { text-decoration: none; color: var(--text); }
   border-bottom: 1px solid var(--border);
 }
 .pane-head-left { display: flex; align-items: baseline; gap: 10px; min-width: 0; overflow: hidden; }
-.pane-title { white-space: nowrap; }
 .status { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* input-config selectors live with the input they configure */
@@ -628,3 +629,8 @@ body.embed .layout { height: 100vh; height: 100dvh; }
 @media (max-width: 460px) {
   .brand-text { display: none; }    /* logo only — frees space for the toolbar */
 }
+.comparison-added { color: #258343; }
+.comparison-removed { color: #c43541; }
+[data-theme="dark"] .comparison-added { color: #75e69a; }
+[data-theme="dark"] .comparison-removed { color: #ff939d; }
+button:disabled { opacity: 0.45; cursor: default; }
