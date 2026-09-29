@@ -1,7 +1,7 @@
 // Diagram controller: owns the camera, input handling (pan / zoom / drag),
 // the render loop, edge routing and export. Renders only when dirty and only
 // what is on screen.
-import { THEMES, rasterizeTable, columnY, measureTable, ROW_H, HEADER_H } from './renderer.js';
+import { THEMES, rasterizeTable, columnY, measureTable, changeColor, ROW_H, HEADER_H } from './renderer.js';
 import { NOTE_COLORS, GROUP_COLORS, NOTE_ORDER, GROUP_ORDER, makeAnnotation } from './annotations.js';
 import { relationCardinality } from './cardinality.js';
 import { inferLinks as inferLinksCore } from './infer-links.js';
@@ -91,8 +91,8 @@ export class Diagram {
     this.pinned = t;
     const keys = new Set([t.key]);
     for (const r of this.model.relations) {
-      if (r.fromTable.toLowerCase() === t.key) keys.add(r.toTable.toLowerCase());
-      if (r.toTable.toLowerCase() === t.key) keys.add(r.fromTable.toLowerCase());
+      if ((r.fromKey ?? r.fromTable.toLowerCase()) === t.key) keys.add((r.toKey ?? r.toTable.toLowerCase()));
+      if ((r.toKey ?? r.toTable.toLowerCase()) === t.key) keys.add((r.fromKey ?? r.fromTable.toLowerCase()));
     }
     this.pinnedKeys = keys;
   }
@@ -625,13 +625,13 @@ export class Diagram {
   }
 
   // bezier segment between two table columns (or null if not drawable / off-screen)
-  _edgeSeg(fromKey, fromCol, toKey, toCol, cull) {
+  _edgeSeg(fromKey, fromCol, toKey, toCol, cull, relation = {}) {
     const byKey = this._tableMap();
     const from = byKey.get(fromKey), to = byKey.get(toKey);
     if (!from || !to || !Number.isFinite(from.x) || !Number.isFinite(to.x)) return null;
     if (this.hidden.has(from.key) || this.hidden.has(to.key)) return null;
-    const fy = from.y + columnY(from, fromCol);
-    const ty = to.y + columnY(to, toCol);
+    const fy = from.y + columnY(from, fromCol, relation.change, relation.fromColumnKeys?.[0]);
+    const ty = to.y + columnY(to, toCol, relation.change, relation.toColumnKeys?.[0]);
     const fromRight = (from.x + from.w / 2) < (to.x + to.w / 2);
     const fx = fromRight ? from.x + from.w : from.x;
     const tx = fromRight ? to.x : to.x + to.w;
@@ -656,23 +656,29 @@ export class Diagram {
     // FK relations carry crow's-foot cardinality; manual links stay neutral.
     const byKey = this._tableMap();
     const edges = [];
-    for (const r of this.model.relations) edges.push({ fk: r.fromTable.toLowerCase(), tk: r.toTable.toLowerCase(), fc: r.fromCols[0], tc: r.toCols[0], manual: false, card: relationCardinality(r, byKey) });
+    for (const r of this.model.relations) {
+      edges.push({ ...r, fk: r.fromKey ?? r.fromTable.toLowerCase(), tk: r.toKey ?? r.toTable.toLowerCase(), fc: r.fromCols[0], tc: r.toCols[0], manual: false, card: relationCardinality(r, byKey) });
+    }
     for (const l of this.manualLinks) edges.push({ fk: l.from.table, tk: l.to.table, fc: l.from.col, tc: l.to.col, manual: true, card: null });
 
     for (const e of edges) {
-      const seg = this._edgeSeg(e.fk, e.fc, e.tk, e.tc, cull);
+      const seg = this._edgeSeg(e.fk, e.fc, e.tk, e.tc, cull, e);
       if (!seg) continue;
-      seg.manual = e.manual;
+      seg.manual = e.manual || e.change === 'removed';
       seg.card = e.card;
+      seg.change = e.change;
+      const color = changeColor(e, theme) || theme.edge;
       const connected = focusKey && (seg.fromKey === focusKey || seg.toKey === focusKey);
       if (focusKey) {
         if (connected) { highlighted.push(seg); continue; }
-        this._stroke(seg, theme.edge, 1.2, fadeAlpha, e.manual);
+        this._stroke(seg, color, 1.2, fadeAlpha, seg.manual);
       } else {
-        this._stroke(seg, theme.edge, 1.5, 0.5, e.manual);
+        this._stroke(seg, color, 1.5, e.change ? 0.9 : 0.5, seg.manual);
       }
     }
-    for (const seg of highlighted) this._stroke(seg, theme.edgeHi, 2.2, 1, seg.manual);
+    for (const seg of highlighted) {
+      this._stroke(seg, changeColor(seg, theme) || theme.edgeHi, 2.2, 1, seg.manual);
+    }
     for (const seg of highlighted) this._drawEdgeLabel(seg);   // words, on top of the lines
   }
 
@@ -776,7 +782,9 @@ export class Diagram {
         if (w.y - t.y < HEADER_H && t.comment) { tooltip = { text: t.comment }; }
         const idx = Math.floor((w.y - t.y - HEADER_H) / ROW_H);
         if (idx >= 0 && idx < t.columns.length) {
-          conn = { t, colIndex: idx };
+          if (!this.model.comparison) {
+            conn = { t, colIndex: idx };
+          }
           const col = t.columns[idx];
           tooltip = (col.comment || col.enumValues?.length)
             ? { text: col.comment, enumType: col.type, enumValues: col.enumValues }
@@ -1165,6 +1173,9 @@ export class Diagram {
   // ---- manual links ----
   // a connector dot under the cursor (to start a link), or null
   _connectorAt(sx, sy) {
+    if (this.model.comparison) {
+      return null;
+    }
     const w = this.screenToWorld(sx, sy);
     const r = 7 / this.cam.scale;
     for (let i = this.model.tables.length - 1; i >= 0; i--) {
@@ -1210,6 +1221,10 @@ export class Diagram {
   }
 
   setManualLinks(arr) {
+    if (this.model.comparison) {
+      this.manualLinks = [];
+      return;
+    }
     this.manualLinks = Array.isArray(arr) ? arr.filter(l => l && l.from && l.to) : [];
     this.markDirty();
   }
@@ -1251,6 +1266,9 @@ export class Diagram {
 
   // heuristic auto-linking by column name; returns count added
   inferLinks() {
+    if (this.model.comparison) {
+      return 0;
+    }
     // Shared heuristic (see infer-links.js). It dedupes against model.relations
     // and our manual links, and returns new links in relation shape; adapt them
     // to the manual-link shape this diagram stores.

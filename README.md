@@ -68,11 +68,13 @@ leaving your browser.
 - **Save / Open projects**: **Save** downloads a `.json` project (SQL + layout + camera
   + dialect); **Open** loads one back.
 - **Share link**: **Share** copies a URL with the entire project encoded in the hash —
-  gzip-compressed + base64. The `#…` fragment is never sent to a server, so sharing
+  raw-DEFLATE-compressed + URL-safe base64. The `#…` fragment is never sent to a server, so sharing
   needs **no backend**, and opening the link restores the exact diagram.
 - **Export** to **PNG** (raster) and **SVG** (vector).
 - **Embed**: copies an `<iframe>` snippet for a read-only, live-panning/zooming
   version of the diagram — see [Embedding a diagram](#embedding-a-diagram) below.
+- **Schema comparisons**: send both SQL snapshots to highlight added and removed
+  tables, columns and foreign keys — see [Code review links](#code-review-links).
 
 ### Editor & appearance
 
@@ -144,6 +146,74 @@ version of the diagram (pan / zoom still work, editing doesn't) — same idea as
   `FOREIGN KEY (...) REFERENCES other(...)`, `CONSTRAINT ... FOREIGN KEY ...`.
 - `ALTER TABLE x ADD [CONSTRAINT ...] FOREIGN KEY (...) REFERENCES y(...)`.
 - Line (`--`, `#`) and block (`/* */`) comments are ignored.
+
+## Schema comparisons
+
+In the app, choose **File → Compare with previous schema…**, then paste or open the
+older schema. The SQL already in the editor becomes the new schema. The editor then
+shows **Previous** and **New** tabs; edit either and the diagram updates. The
+visual editor, input format and dialect pickers are unavailable while comparing.
+**Exit comparison** (in the editor header or the File menu) keeps the new schema.
+
+### Code review links
+
+Generate a comparison link from two complete PostgreSQL schema snapshots, such as
+`pg_dump --schema-only` artifacts. Run this from CI with Node.js 18 or newer; no
+package installation is required:
+
+```bash
+node scripts/create-comparison-link.mjs previous.sql current.sql
+```
+
+The script prints a URL. Its optional third argument selects a self-hosted viewer
+or an embed, for example `https://your-viewer.example/?embed=1`.
+
+For integrations in another language, encode this project object as UTF-8 JSON,
+compress it with **raw DEFLATE** (without a gzip or zlib wrapper), then encode the
+bytes as unpadded URL-safe base64. Append it to the viewer URL as `#s=z<encoded>`:
+
+```json
+{
+  "app": "dbdiga",
+  "version": 2,
+  "mode": "diff",
+  "dialect": "postgres",
+  "previousSql": "CREATE TABLE users (id bigint, name text);",
+  "sql": "CREATE TABLE users (id bigint, name text, email text);"
+}
+```
+
+`previousSql` is the baseline; `sql` is the proposed schema. Either may be an empty
+string to represent an empty database. Supply complete snapshots, not migration
+scripts. Existing single-schema links continue to work.
+
+The diagram combines both versions in one layout. Additions are green with `+`;
+removals are red with `−`. Changed columns appear as adjacent old and new rows.
+Removed foreign keys use dashed red lines. Unchanged objects retain their usual
+appearance. Pan, zoom, arrange and hide tables as usual; on-diagram editing and
+inferred relationships are disabled in comparisons. Share, Embed and Save retain both
+snapshots and the layout, and PNG/SVG exports retain the change colours. Open a
+saved comparison JSON file to restore it. Code-format exports are disabled because
+the combined diagram contains objects from two different schemas.
+
+Comparison covers table and column names, declared column types, nullability,
+primary/unique column flags, enum values and foreign-key endpoints (including all
+columns of composite foreign keys). PostgreSQL `ALTER TABLE … ADD` primary and
+unique keys are recognised. Unqualified table names are treated as `public`, and
+schema-qualified names and quoted identifier case distinguish objects.
+Whitespace, SQL comments and ordering do not count as changes. Renames appear as
+a removal and an addition; equivalent type aliases can appear as type changes.
+
+This is a diagram comparison, not a full PostgreSQL migration analyser. Defaults,
+checks, indexes, constraint names, foreign-key actions, composite primary/unique
+constraint grouping and database objects outside the diagram are not compared.
+SQL `COMMENT ON` changes alone are not highlighted. Parse errors identify which
+snapshot needs attention.
+
+Both snapshots are carried in the URL, so links grow with schema size. The
+generator omits layout data to keep CI links smaller. If a review tool cannot
+handle a long link, distribute the same JSON payload as a downloadable project
+file and open it with **Open**.
 
 ## BigQuery
 

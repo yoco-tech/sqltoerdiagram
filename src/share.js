@@ -1,6 +1,6 @@
 // Encode/decode a project into a URL-safe string for share links. The payload
 // lives in the URL hash (#s=…) which browsers never send to the server, so
-// sharing needs no backend. We gzip-deflate when the browser supports it (links
+// sharing needs no backend. We use raw DEFLATE when the browser supports it (links
 // stay short — SQL compresses well) and fall back to raw base64 otherwise.
 // A 1-char flag prefix records which path was used.
 

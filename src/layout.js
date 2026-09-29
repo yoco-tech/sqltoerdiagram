@@ -23,7 +23,7 @@ export function layout(model, opts = {}, hidden = null, manualLinks = []) {
   const isHidden = (key) => !!(hidden && hidden.has(key));
 
   // FK relations plus user-drawn / inferred manual links, as [fromKey, toKey]
-  const edges = model.relations.map(r => [r.fromTable.toLowerCase(), r.toTable.toLowerCase()]);
+  const edges = model.relations.map(r => [(r.fromKey ?? r.fromTable.toLowerCase()), (r.toKey ?? r.toTable.toLowerCase())]);
   for (const l of manualLinks) edges.push([l.from.table, l.to.table]);
 
   // size every table from its content

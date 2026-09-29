@@ -33,6 +33,10 @@ export const THEMES = {
     edgeHi: '#5aa7ff',
     shadow: 'rgba(0,0,0,0.45)',
     divider: '#2b333f',
+    added: '#75e69a',
+    addedBg: '#173a29',
+    removed: '#ff939d',
+    removedBg: '#45232b',
   },
   light: {
     bg: '#f4f6fa',
@@ -50,6 +54,10 @@ export const THEMES = {
     edgeHi: '#2f6fd0',
     shadow: 'rgba(20,30,50,0.16)',
     divider: '#e3e8ef',
+    added: '#196d35',
+    addedBg: '#dcf5e3',
+    removed: '#b12232',
+    removedBg: '#ffe1e5',
   },
 };
 
@@ -73,6 +81,19 @@ export function typeLabel(t, c) {
   return isNullable(t, c) ? c.type + '?' : c.type;
 }
 
+export function changeName(object) {
+  const prefix = object.change === 'added' ? '+ ' : object.change === 'removed' ? '− ' : '';
+  return prefix + object.name;
+}
+
+export function changeColor(object, theme) {
+  return object.change === 'added' ? theme.added : object.change === 'removed' ? theme.removed : null;
+}
+
+export function changeBackground(object, theme) {
+  return object.change === 'added' ? theme.addedBg : object.change === 'removed' ? theme.removedBg : null;
+}
+
 // Tables in the default schema read as unqualified, so only a non-public
 // schema is worth the header space.
 export function schemaLabel(t) {
@@ -91,7 +112,7 @@ export function headerTextLayout(t, w) {
   const schemaReserve = schema ? ctx.measureText(schema).width + SCHEMA_GAP : 0;
 
   ctx.font = HEADER_FONT;
-  const name = truncate(ctx, t.name, w - PAD_X * 2 - 18 - schemaReserve);
+  const name = truncate(ctx, changeName(t), w - PAD_X * 2 - 18 - schemaReserve);
   const metrics = ctx.measureText(name);
   const ascent = metrics.fontBoundingBoxAscent ?? 10;
   const descent = metrics.fontBoundingBoxDescent ?? 3;
@@ -119,7 +140,7 @@ export function measureTable(t) {
   }
   const ctx = measureCtx();
   ctx.font = HEADER_FONT;
-  let w = ctx.measureText(t.name).width + PAD_X * 2 + 24;
+  let w = ctx.measureText(changeName(t)).width + PAD_X * 2 + 24;
   const schema = schemaLabel(t);
   if (schema) {
     ctx.font = TYPE_FONT;
@@ -128,7 +149,7 @@ export function measureTable(t) {
   }
   ctx.font = FONT_STACK;
   for (const c of t.columns) {
-    const nameW = ctx.measureText(c.name).width;
+    const nameW = ctx.measureText(changeName(c)).width;
     ctx.font = TYPE_FONT;
     const typeW = ctx.measureText(typeLabel(t, c)).width;
     ctx.font = FONT_STACK;
@@ -157,8 +178,9 @@ export function rasterizeTable(t, theme, dpr) {
 
   // rows (alternating)
   for (let i = 0; i < t.columns.length; i++) {
-    if (i % 2 === 1) {
-      ctx.fillStyle = theme.rowAlt;
+    const background = changeBackground(t.columns[i], theme);
+    if (background || i % 2 === 1) {
+      ctx.fillStyle = background || theme.rowAlt;
       ctx.fillRect(1, HEADER_H + i * ROW_H, w - 2, ROW_H);
     }
   }
@@ -167,13 +189,13 @@ export function rasterizeTable(t, theme, dpr) {
   ctx.save();
   roundRectTop(ctx, 0.5, 0.5, w - 1, HEADER_H, r);
   ctx.clip();
-  ctx.fillStyle = theme.header;
+  ctx.fillStyle = changeBackground(t, theme) || theme.header;
   ctx.fillRect(0, 0, w, HEADER_H);
   ctx.restore();
 
   const header = headerTextLayout(t, w);
   ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = theme.headerText;
+  ctx.fillStyle = changeColor(t, theme) || theme.headerText;
   ctx.font = HEADER_FONT;
   ctx.fillText(header.name, PAD_X, header.baselineY);
 
@@ -202,6 +224,8 @@ export function rasterizeTable(t, theme, dpr) {
       drawBadge(ctx, PAD_X - 2, y, 'PK', theme.pk);
     } else if (c.fk) {
       drawBadge(ctx, PAD_X - 2, y, 'FK', theme.fk);
+    } else if (c.unique) {
+      drawBadge(ctx, PAD_X - 2, y, 'UQ', theme.pk);
     }
 
     const nx = PAD_X + BADGE_W - 4;
@@ -214,13 +238,13 @@ export function rasterizeTable(t, theme, dpr) {
       typeReserve = Math.min(ctx.measureText(c.type + marker).width, 120) + GAP;
     }
     ctx.font = FONT_STACK;
-    ctx.fillStyle = theme.rowText;
-    ctx.fillText(truncate(ctx, c.name, w - nx - PAD_X - typeReserve), nx, y);
+    ctx.fillStyle = changeColor(c, theme) || theme.rowText;
+    ctx.fillText(truncate(ctx, changeName(c), w - nx - PAD_X - typeReserve), nx, y);
 
     // type, right-aligned
     if (c.type) {
       ctx.font = TYPE_FONT;
-      ctx.fillStyle = theme.typeText;
+      ctx.fillStyle = changeColor(c, theme) || theme.typeText;
       ctx.textAlign = 'right';
       // truncate the type alone, so a long one never swallows the marker
       const room = 120 - ctx.measureText(marker).width;
@@ -231,7 +255,7 @@ export function rasterizeTable(t, theme, dpr) {
 
   // border
   roundRect(ctx, 0.5, 0.5, w - 1, h - 1, r);
-  ctx.strokeStyle = theme.tableBorder;
+  ctx.strokeStyle = changeColor(t, theme) || theme.tableBorder;
   ctx.lineWidth = 1;
   ctx.stroke();
 
@@ -247,9 +271,13 @@ function drawBadge(ctx, x, y, text, color) {
 }
 
 // y-position (table-local) of a column's connection point.
-export function columnY(t, colName) {
+export function columnY(t, colName, change, columnKey) {
   if (!colName) return t.h / 2;
-  const idx = t.columns.findIndex(c => c.name.toLowerCase() === colName.toLowerCase());
+  const matches = column => columnKey !== undefined ? column.key === columnKey : column.name.toLowerCase() === colName.toLowerCase();
+  let idx = t.columns.findIndex(column => matches(column) && (change === 'removed' ? column.change !== 'added' : column.change !== 'removed'));
+  if (idx < 0) {
+    idx = t.columns.findIndex(matches);
+  }
   if (idx < 0) return HEADER_H / 2;
   return HEADER_H + idx * ROW_H + ROW_H / 2;
 }

@@ -79,13 +79,37 @@ function clean(id) {
   return id;
 }
 function bareName(id) {
-  const parts = id.split('.');
+  const parts = identifierParts(id);
   return clean(parts[parts.length - 1]);
 }
 // Qualifier directly before the bare name ("db.sales.orders" -> "sales").
 function schemaName(id) {
-  const parts = id.split('.');
+  const parts = identifierParts(id);
   return parts.length > 1 ? clean(parts[parts.length - 2]) : null;
+}
+
+function identifierParts(identifier) {
+  return (identifier.match(/"(?:[^"]|"")*"|`[^`]*`|\[[^\]]*\]|[^.]+/g) || []).map(part => part.trim());
+}
+
+function identifierKey(identifier) {
+  const value = identifier.trim();
+  if (value.startsWith('"')) {
+    return value.slice(1, -1).replace(/""/g, '"');
+  }
+  return clean(value).toLowerCase();
+}
+
+function qualifiedTableKey(identifier) {
+  const parts = identifierParts(identifier);
+  return JSON.stringify([parts.length > 1 ? identifierKey(parts.at(-2)) : 'public', identifierKey(parts.at(-1))]);
+}
+
+function columnType(tokens) {
+  const end = tokens.findIndex((token, index) => index > 0 && /^(?:not|null|default|primary|unique|references|check|constraint|collate|generated)$/i.test(token.text));
+  const typeTokens = tokens.slice(1, end < 0 ? undefined : end);
+  return typeTokens.map(token => token.text).join(' ')
+    .replace(/"(?:[^"]|"")*"|[^"]+/g, part => part.startsWith('"') ? part : part.toLowerCase().replace(/\s*([().,])\s*/g, '$1'));
 }
 
 // Tokenise a definition; each token carries absolute start/end offsets.
@@ -137,14 +161,14 @@ function colSpans(innerText, innerBase) {
     const raw = m[0];
     let s = seg.start + m.index, e = s + raw.length;
     if (/^[`"\[]/.test(raw)) { s += 1; e -= 1; }
-    out.push({ name: bareName(raw).toLowerCase(), start: s, end: e });
+    out.push({ name: bareName(raw).toLowerCase(), key: identifierKey(raw), start: s, end: e });
   }
   return out;
 }
 
 const CREATE_RE = /create\s+(?:or\s+replace\s+)?(?:temporary\s+|temp\s+|transient\s+|volatile\s+)?table\s+(?:if\s+not\s+exists\s+)?/i;
 
-export function parseSchema(sql) {
+export function parseSchema(sql, { qualifiedNames = false } = {}) {
   const original = sql || '';
   const S = blankComments(original);
   const statements = splitStatements(S);
@@ -154,11 +178,13 @@ export function parseSchema(sql) {
   const errors = [];
   const comments = [];        // {kind: 'table'|'column', target, text|null}
   const enums = new Map();    // lowerBareTypeName -> [values]
+  const keyConstraints = [];
 
-  const ensureTable = (name, nameSpan, schema = null) => {
-    const key = name.toLowerCase();
+  const tableKey = rawName => qualifiedNames ? qualifiedTableKey(rawName) : bareName(rawName).toLowerCase();
+  const ensureTable = (name, nameSpan, schema = null, rawName = name) => {
+    const key = tableKey(rawName);
     if (!tables.has(key)) {
-      tables.set(key, { name, key, schema, columns: [], colIndex: new Map(), colRefs: [], nullabilityKnown: true, nameSpan, bodySpan: null });
+      tables.set(key, { name, key, schema, rawName, columns: [], colIndex: new Map(), colRefs: [], nullabilityKnown: true, nameSpan, bodySpan: null });
     } else {
       const existing = tables.get(key);
       if (nameSpan && !existing.nameSpan) {
@@ -184,9 +210,9 @@ export function parseSchema(sql) {
       if (open < 0) continue;
       // table name token sits between afterStart and the '('
       const nameRegion = after.slice(0, open);
-      const rawNameMatch = nameRegion.match(/(\S+)/);
+      const rawNameMatch = nameRegion.match(/\S/);
       if (!rawNameMatch) continue;
-      const rawName = rawNameMatch[1];
+      const rawName = nameRegion.trim();
       const nameLocal = afterStart + rawNameMatch.index;
       // span covers the bare table name (last dotted part) for clean rename
       const dotIdx = rawName.lastIndexOf('.');
@@ -204,10 +230,10 @@ export function parseSchema(sql) {
       if (end < 0) { errors.push(`Unbalanced parens in table "${name}"`); continue; }
       const bodyLocal = afterStart + open + 1;
       const body = after.slice(open + 1, end);
-      const table = ensureTable(name, nameSpan, schema);
+      const table = ensureTable(name, nameSpan, schema, rawName);
       table.bodySpan = [base + bodyLocal, base + afterStart + end];
       table.stmtSpan = [base + cm.index, base + stmt.length];   // CREATE … (sans ';')
-      parseTableBody(body, base + bodyLocal, table, relations);
+      parseTableBody(body, base + bodyLocal, table, relations, qualifiedNames);
       continue;
     }
 
@@ -215,11 +241,16 @@ export function parseSchema(sql) {
     // (pg_dump emits "ALTER TABLE ONLY schema.table")
     const am = stmt.match(/alter\s+table\s+(?:only\s+)?([^\s(]+(?:\.[^\s(]+)?)\s+add\s+/is);
     if (am) {
-      const t = bareName(am[1]);
+      const t = am[1];
       const tail = stmt.slice(am.index + am[0].length);
       const tailBase = base + am.index + am[0].length;
       const rel = parseForeignKey(tail, tailBase, t);
       if (rel) relations.push(rel);
+      if (/\bprimary\s+key\b/i.test(tail)) {
+        keyConstraints.push({ key: tableKey(t), tokens: tokenize(tail, tailBase), flag: 'pk' });
+      } else if (/\bunique\b/i.test(tail)) {
+        keyConstraints.push({ key: tableKey(t), tokens: tokenize(tail, tailBase), flag: 'unique' });
+      }
       continue;
     }
 
@@ -232,7 +263,7 @@ export function parseSchema(sql) {
       const close = stmt.lastIndexOf(')');
       const body = stmt.slice(bodyStart, close > bodyStart ? close : undefined);
       const values = [...body.matchAll(/'((?:[^']|'')*)'/g)].map(v => v[1].replace(/''/g, "'"));
-      if (values.length) { enums.set(bareName(em[1]).toLowerCase(), values); }
+      if (values.length) { enums.set(tableKey(em[1]), values); }
       continue;
     }
 
@@ -246,15 +277,23 @@ export function parseSchema(sql) {
     }
   }
 
+  for (const constraint of keyConstraints) {
+    const table = tables.get(constraint.key);
+    if (table) {
+      markKeyCols(constraint.tokens, table, constraint.flag, qualifiedNames);
+    }
+  }
+
   // attach COMMENT ON text to tables / columns (later statements win; IS NULL clears)
   for (const c of comments) {
     const parts = c.target.split('.').map(clean);
     if (c.kind === 'table') {
-      const table = tables.get(parts[parts.length - 1].toLowerCase());
+      const table = tables.get(tableKey(c.target));
       if (table) table.comment = c.text || null;
     } else if (parts.length >= 2) {
-      const table = tables.get(parts[parts.length - 2].toLowerCase());
-      const column = table?.colIndex.get(parts[parts.length - 1].toLowerCase());
+      const identifiers = identifierParts(c.target);
+      const table = tables.get(tableKey(identifiers.slice(0, -1).join('.')));
+      const column = table?.colIndex.get(qualifiedNames ? identifierKey(identifiers.at(-1)) : parts.at(-1).toLowerCase());
       if (column) column.comment = c.text || null;
     }
   }
@@ -263,9 +302,8 @@ export function parseSchema(sql) {
   if (enums.size) {
     for (const table of tables.values()) {
       for (const column of table.columns) {
-        const bareType = bareName((column.typeRaw || '').replace(/\(.*$/s, '').trim())
-          .replace(/\[\s*\]?$/, '').toLowerCase();
-        const values = enums.get(bareType);
+        const rawType = (column.typeRaw || '').replace(/\(.*$/s, '').trim().replace(/\[\s*\]?$/, '');
+        const values = rawType ? enums.get(tableKey(rawType)) : null;
         if (values) { column.enumValues = values; }
       }
     }
@@ -275,11 +313,11 @@ export function parseSchema(sql) {
   const tableList = [...tables.values()];
   const resolved = [];
   for (const r of relations) {
-    const from = tables.get(r.fromTable.toLowerCase());
-    const to = tables.get(r.toTable.toLowerCase());
+    const from = tables.get(tableKey(r.fromTable));
+    const to = tables.get(tableKey(r.toTable));
     if (!from) continue;
-    for (const c of r.fromCols) {
-      const col = from.colIndex.get(c.toLowerCase());
+    for (let index = 0; index < r.fromCols.length; index++) {
+      const col = from.colIndex.get(qualifiedNames ? r.fromColumnKeys[index] : r.fromCols[index].toLowerCase());
       if (col) col.fk = true;
     }
     resolved.push({
@@ -289,14 +327,19 @@ export function parseSchema(sql) {
       toCols: r.toCols,
       toMissing: !to,
       refSpan: r.refSpan || null,
+      fromKey: from.key,
+      toKey: to?.key || tableKey(r.toTable),
+      fromColumnKeys: r.fromColumnKeys,
+      toColumnKeys: r.toColumnKeys,
     });
   }
 
   return { tables: tableList, relations: resolved, errors, sql: original, enums };
 }
 
-function parseTableBody(body, base, table, relations) {
+function parseTableBody(body, base, table, relations, qualifiedNames) {
   const items = splitTopCommas(body, base);
+  const keyConstraints = [];
   for (const part of items) {
     const item = part.text;
     if (!item.trim()) continue;
@@ -305,24 +348,26 @@ function parseTableBody(body, base, table, relations) {
     const head = clean(tokens[0].text).toLowerCase();
 
     if (head === 'primary' && tokens[1] && /key/i.test(tokens[1].text)) {
-      markKeyCols(tokens, table, 'pk');
+      keyConstraints.push({ tokens, flag: 'pk' });
       continue;
     }
     if (head === 'unique') {
-      markKeyCols(tokens, table, 'unique');
+      keyConstraints.push({ tokens, flag: 'unique' });
       continue;
     }
     if (head === 'foreign' && tokens[1] && /key/i.test(tokens[1].text)) {
-      const rel = parseForeignKey(item, part.start, table.name);
+      const rel = parseForeignKey(item, part.start, table.rawName);
       if (rel) { relations.push(rel); table.colRefs.push(...rel.localColSpans); }
       continue;
     }
     if (head === 'constraint') {
       if (/foreign\s+key/i.test(item)) {
-        const rel = parseForeignKey(item, part.start, table.name);
+        const rel = parseForeignKey(item, part.start, table.rawName);
         if (rel) { relations.push(rel); table.colRefs.push(...rel.localColSpans); }
       } else if (/primary\s+key/i.test(item)) {
-        markKeyCols(tokens, table, 'pk');
+        keyConstraints.push({ tokens, flag: 'pk' });
+      } else if (/unique/i.test(item)) {
+        keyConstraints.push({ tokens, flag: 'unique' });
       }
       continue;
     }
@@ -350,11 +395,14 @@ function parseTableBody(body, base, table, relations) {
       }
     }
 
-    const rest = item.toLowerCase();
+    const rest = item.slice(nameTok.end - part.start).replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"/g, '').toLowerCase();
+    const typeSignature = columnType(tokens);
     const col = {
       name: colName,
-      type: prettyType(type),
-      typeRaw: type,
+      key: identifierKey(nameTok.text),
+      typeSignature,
+      type: qualifiedNames ? typeSignature : prettyType(type),
+      typeRaw: qualifiedNames ? typeSignature : type,
       pk: /\bprimary\s+key\b/.test(rest),
       nn: /\bnot\s+null\b/.test(rest),
       unique: /\bunique\b/.test(rest),
@@ -364,34 +412,39 @@ function parseTableBody(body, base, table, relations) {
       defSpan: [part.start, part.start + item.length],   // full "name type …" segment
     };
     table.columns.push(col);
-    table.colIndex.set(colName.toLowerCase(), col);
+    table.colIndex.set(qualifiedNames ? col.key : colName.toLowerCase(), col);
 
     // inline REFERENCES other(col)
     const refm = item.match(/references\s+([^\s(]+(?:\.[^\s(]+)?)\s*(\([^)]*\))?/id);
     if (refm) {
       col.fk = true;
-      const toTable = bareName(refm[1]);
+      const toTable = refm[1];
       const toCols = refm[2] ? parseColumnsFromParen(refm[2]) : [];
       const gi = refm.indices[1];
       const dotIdx = refm[1].lastIndexOf('.');
       const refStart = part.start + gi[0] + (dotIdx >= 0 ? dotIdx + 1 : 0);
       relations.push({
-        fromTable: table.name,
+        fromTable: table.rawName,
         fromCols: [colName],
+        fromColumnKeys: [col.key],
         toTable,
         toCols,
+        toColumnKeys: refm[2] ? splitTopCommas(refm[2].slice(1, -1), 0).map(part => identifierKey(part.text)) : [],
         refSpan: [refStart, part.start + gi[1]],
       });
     }
   }
+  for (const constraint of keyConstraints) {
+    markKeyCols(constraint.tokens, table, constraint.flag, qualifiedNames);
+  }
 }
 
 // Mark a table-level key clause's columns and record their spans for renames.
-function markKeyCols(tokens, table, flag) {
+function markKeyCols(tokens, table, flag, qualifiedNames) {
   const grp = tokens.find(t => t.text.startsWith('('));
   if (!grp) return;
   for (const ref of colSpans(grp.text.slice(1, -1), grp.start + 1)) {
-    const col = table.colIndex.get(ref.name);
+    const col = table.colIndex.get(qualifiedNames ? ref.key : ref.name);
     if (col) col[flag] = true;
     table.colRefs.push(ref);
   }
@@ -403,13 +456,15 @@ function parseForeignKey(text, base, fromTable) {
   );
   if (!m) return null;
   const fromCols = m[1].split(',').map(s => bareName(s)).filter(Boolean);
-  const toTable = bareName(m[2]);
+  const toTable = m[2];
   const toCols = m[4] ? m[4].split(',').map(s => bareName(s)).filter(Boolean) : [];
   const gi = m.indices[2];
   const dotIdx = m[2].lastIndexOf('.');
   const refStart = base + gi[0] + (dotIdx >= 0 ? dotIdx + 1 : 0);
   const localColSpans = colSpans(m[1], base + m.indices[1][0]);
-  return { fromTable, fromCols, toTable, toCols, refSpan: [refStart, base + gi[1]], localColSpans };
+  const fromColumnKeys = splitTopCommas(m[1], 0).map(part => identifierKey(part.text));
+  const toColumnKeys = m[4] ? splitTopCommas(m[4], 0).map(part => identifierKey(part.text)) : [];
+  return { fromTable, fromCols, toTable, toCols, fromColumnKeys, toColumnKeys, refSpan: [refStart, base + gi[1]], localColSpans };
 }
 
 // The value after IS in a COMMENT ON statement: NULL, or a (possibly

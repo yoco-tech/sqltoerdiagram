@@ -11,6 +11,7 @@ import { highlightSQL } from './highlight.js';
 import { encodeShare, decodeShare } from './share.js';
 import { sanitizeAnnotations } from './annotations.js';
 import { EXAMPLE_SQL } from './examples.js';
+import { compareSchemas, previousSchemaFromProject } from './comparison.js';
 
 const $ = (id) => document.getElementById(id);
 const sqlEl = $('sql');
@@ -28,6 +29,92 @@ let visualEditor = null;     // created after setup; refreshed on every model ch
 
 // read-only embed view (?embed=1) — never editable, no matter the input format
 const isEmbed = new URLSearchParams(location.search).has('embed');
+let previousSql = null;          // previous schema while comparing; null otherwise
+let comparisonTab = 'new';       // which schema the single textarea is showing
+let stashedNewSql = '';          // new schema text while the Previous tab is showing
+const COMPARISON_KEY = 'dbdiga-comparison';
+
+/** The new schema text, wherever it currently lives. */
+function currentSql() {
+  return comparisonTab === 'previous' ? stashedNewSql : sqlEl.value;
+}
+
+function setComparisonTab(tab) {
+  if (tab === comparisonTab) {
+    return;
+  }
+  if (tab === 'previous') {
+    stashedNewSql = sqlEl.value;
+    sqlEl.value = previousSql;
+  } else {
+    previousSql = sqlEl.value;
+    sqlEl.value = stashedNewSql;
+  }
+  comparisonTab = tab;
+  for (const button of $('comparison-toggle').querySelectorAll('.seg-btn')) {
+    button.classList.toggle('active', button.dataset.tab === tab);
+  }
+  syncHighlight();
+}
+
+function setComparison(previous) {
+  setComparisonTab('new');        // the editor must hold the new schema before swapping baselines
+  previousSql = previous;
+  const comparing = previous !== null;
+  $('comparison-toggle').hidden = !comparing;
+  $('btn-exit-comparison-head').hidden = !comparing;
+  $('format-wrap').hidden = comparing;
+  $('dialect-wrap').hidden = comparing;
+  $('mode-toggle').hidden = comparing;
+  $('btn-compare').hidden = comparing;
+  $('btn-exit-comparison').hidden = !comparing;
+  $('btn-infer').disabled = comparing;
+  for (const button of document.querySelectorAll('#export-menu [data-export]')) {
+    button.disabled = comparing && !['png', 'svg'].includes(button.dataset.export);
+  }
+  setMode(editorMode);
+}
+
+function collectProject() {
+  return {
+    app: 'dbdiga',
+    version: previousSql === null ? 1 : 2,
+    sql: currentSql(),
+    dialect,
+    ...(previousSql === null ? {} : { mode: 'diff', previousSql }),
+    ...collectLayout(),
+  };
+}
+
+function loadProject(data) {
+  const previous = previousSchemaFromProject(data);
+  setComparison(previous);
+  sqlEl.value = data.sql;
+  diagram.setModel({ tables: [], relations: [] });
+  diagram.setHidden([]);
+  diagram.setManualLinks([]);
+  diagram.setAnnotations([]);
+  if (data.dialect && DIALECTS[data.dialect]) {
+    dialect = data.dialect;
+    localStorage.setItem('dbdiga-dialect', dialect);
+    syncDialect();
+  }
+  if (data.format && FORMATS[data.format]) {
+    formatChoice = data.format;
+    localStorage.setItem('dbdiga-format', formatChoice);
+    syncFormat();
+  }
+  firstRender = true;
+  lastModel = null;
+  // a shared schema with no saved positions (e.g. gallery links) → auto-arrange
+  const hasPositions = data.positions && Object.keys(data.positions).length > 0;
+  if (hasPositions) {
+    rebuild({ restore: data });
+  } else {
+    rebuild({ arrange: true });
+  }
+  saveLayout();
+}
 
 // ---- syntax highlight layer (painted behind the transparent textarea) ----
 let hlQueued = false;
@@ -258,13 +345,22 @@ let formatChoice = localStorage.getItem('dbdiga-format') || 'auto';
 if (!FORMATS[formatChoice]) formatChoice = 'auto';
 
 function rebuild({ arrange = false, restore = null } = {}) {
-  const sql = sqlEl.value;
-  localStorage.setItem('dbdiga-sql', sql);
+  const sql = currentSql();
+  try {
+    if (previousSql === null) {
+      localStorage.removeItem(COMPARISON_KEY);
+      localStorage.setItem('dbdiga-sql', sql);
+    } else {
+      localStorage.setItem(COMPARISON_KEY, JSON.stringify({ sql, previousSql }));
+    }
+  } catch {
+    // A full local cache must not prevent opening a shared schema.
+  }
   syncHighlight();
 
   let result;
   try {
-    result = parseSchema(sql, formatChoice);
+    result = previousSql === null ? parseSchema(sql, formatChoice) : compareSchemas(previousSql, sql);
   } catch (err) {
     statusEl.textContent = 'Parse error';
     statusEl.className = 'status err';
@@ -344,14 +440,29 @@ function updateStatus(result, sql) {
   emptyEl.style.display = hasTables ? 'none' : 'grid';
   const nT = result.tables.length;
   const nR = result.relations.length;
-  if (!hasTables && sql.trim()) {
+  if (result.comparison) {
+    const added = result.tables.filter(table => table.change === 'added').length;
+    const removed = result.tables.filter(table => table.change === 'removed').length;
+    const changedColumns = result.tables.flatMap(table => table.columns).filter(column => column.change).length;
+    const changedRelations = result.relations.filter(relation => relation.change).length;
+    const changes = added || removed || changedColumns || changedRelations;
+    const counts = `${nT} table${nT !== 1 ? 's' : ''} · ${nR} relation${nR !== 1 ? 's' : ''}`;
+    statusEl.textContent = result.errors.length ? result.errors.join(' · ') :
+      `${counts} · ${changes ? `+${added} −${removed} tables · ${changedColumns} columns · ${changedRelations} FKs` : 'no changes'}`;
+    statusEl.title = statusEl.textContent;   // the pane is narrow; hover reveals the full summary
+    statusEl.className = result.errors.length ? 'status warn' : 'status ok';
+    emptyEl.style.display = 'none';
+  } else if (!hasTables && sql.trim()) {
+    statusEl.title = '';
     statusEl.textContent = result.errors[0] || 'No CREATE TABLE found';
     statusEl.className = 'status warn';
   } else if (hasTables) {
     const fmt = result.format && result.format !== 'sql' ? `${FORMATS[result.format] || result.format} · ` : '';
+    statusEl.title = '';
     statusEl.textContent = `${fmt}${nT} table${nT !== 1 ? 's' : ''} · ${nR} relation${nR !== 1 ? 's' : ''}`;
     statusEl.className = 'status ok';
   } else {
+    statusEl.title = '';
     statusEl.textContent = '';
     statusEl.className = 'status';
   }
@@ -422,6 +533,9 @@ diagram.onAddColumn = (tableKey) => {
 // debounced live parsing; highlight repaints immediately (rAF-coalesced)
 let timer = null;
 sqlEl.addEventListener('input', () => {
+  if (comparisonTab === 'previous') {
+    previousSql = sqlEl.value;
+  }
   syncHighlight();
   clearTimeout(timer);
   timer = setTimeout(() => rebuild(), 180);
@@ -429,6 +543,10 @@ sqlEl.addEventListener('input', () => {
 
 // ---- buttons ----
 function loadExample() {
+  history.replaceState(null, '', location.pathname + location.search);
+  setComparison(null);
+  diagram.setHidden([]);
+  diagram.setManualLinks([]);
   sqlEl.value = EXAMPLE_SQL;
   firstRender = true;
   rebuild({ arrange: true });
@@ -611,17 +729,63 @@ let editorMode = localStorage.getItem('dbdiga-mode') || 'code';
 function setMode(mode) {
   editorMode = mode === 'visual' ? 'visual' : 'code';
   localStorage.setItem('dbdiga-mode', editorMode);
-  layoutEl.classList.toggle('visual-mode', editorMode === 'visual');
-  visualPane.hidden = editorMode !== 'visual';
+  const visual = editorMode === 'visual' && previousSql === null;   // comparisons are code-only
+  layoutEl.classList.toggle('visual-mode', visual);
+  visualPane.hidden = !visual;
   for (const b of modeToggle.querySelectorAll('.seg-btn'))
     b.classList.toggle('active', b.dataset.mode === editorMode);
-  if (editorMode === 'visual') visualEditor.render();
+  if (visual) visualEditor.render();
 }
 modeToggle.addEventListener('click', (e) => {
   const b = e.target.closest('.seg-btn');
   if (b) setMode(b.dataset.mode);
 });
 setMode(editorMode);
+$('comparison-toggle').addEventListener('click', (e) => {
+  const button = e.target.closest('.seg-btn');
+  if (button) {
+    setComparisonTab(button.dataset.tab);
+  }
+});
+
+// ---- Schema comparison: paste or open the previous schema; the editor holds the new one ----
+const compareModal = $('compare-modal');
+const comparePreviousEl = $('compare-previous');
+const previousSqlInput = $('previous-sql-open');
+function closeCompareModal() { compareModal.hidden = true; }
+function startComparison(previous) {
+  closeCompareModal();
+  history.replaceState(null, '', location.pathname + location.search);   // any shared link is now stale
+  setComparison(previous);
+  rebuild();
+}
+function exitComparison() {
+  history.replaceState(null, '', location.pathname + location.search);
+  setComparison(null);
+  rebuild();
+}
+$('btn-compare').addEventListener('click', () => {
+  comparePreviousEl.value = '';
+  compareModal.hidden = false;
+  comparePreviousEl.focus();
+});
+$('compare-close').addEventListener('click', closeCompareModal);
+compareModal.addEventListener('click', (e) => { if (e.target === compareModal) closeCompareModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !compareModal.hidden) closeCompareModal(); });
+$('compare-run').addEventListener('click', () => startComparison(comparePreviousEl.value));
+$('compare-open-file').addEventListener('click', () => previousSqlInput.click());
+previousSqlInput.addEventListener('change', () => {
+  const file = previousSqlInput.files && previousSqlInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    comparePreviousEl.value = String(reader.result);
+    previousSqlInput.value = '';
+  };
+  reader.readAsText(file);
+});
+$('btn-exit-comparison').addEventListener('click', exitComparison);
+$('btn-exit-comparison-head').addEventListener('click', exitComparison);
 
 $('zoom-in').addEventListener('click', () => diagram.zoomBy(1.25));
 $('zoom-out').addEventListener('click', () => diagram.zoomBy(0.8));
@@ -724,13 +888,7 @@ document.addEventListener('click', () => { fileMenu.hidden = true; });
 
 // ---- Save / Open project (SQL + layout + camera + dialect) ----
 $('btn-save').addEventListener('click', () => {
-  const project = {
-    app: 'dbdiga',
-    version: 1,
-    sql: sqlEl.value,
-    dialect,
-    ...collectLayout(),
-  };
+  const project = collectProject();
   const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   download('schema.sqltoerdiagram.json', url);
@@ -745,7 +903,7 @@ function flashButton(btn, text) {
 }
 $('btn-share').addEventListener('click', async () => {
   const btn = $('btn-share');
-  const project = { app: 'dbdiga', version: 1, sql: sqlEl.value, dialect, ...collectLayout() };
+  const project = collectProject();
   let payload;
   try { payload = await encodeShare(project); }
   catch (err) { console.error(err); flashButton(btn, 'Failed'); return; }
@@ -758,7 +916,7 @@ $('btn-share').addEventListener('click', async () => {
 
 // ---- Embed: an <iframe> snippet that renders this diagram read-only & live ----
 $('btn-embed').addEventListener('click', async () => {
-  const project = { app: 'dbdiga', version: 1, sql: sqlEl.value, dialect, ...collectLayout() };
+  const project = collectProject();
   let payload;
   try { payload = await encodeShare(project); }
   catch (err) { console.error(err); return; }
@@ -786,13 +944,8 @@ fileInput.addEventListener('change', () => {
   reader.onload = () => {
     try {
       const data = JSON.parse(String(reader.result));
-      if (typeof data.sql !== 'string') throw new Error('not a dbdiga project');
-      sqlEl.value = data.sql;
-      localStorage.setItem('dbdiga-sql', data.sql);
-      if (data.dialect && DIALECTS[data.dialect]) { dialect = data.dialect; localStorage.setItem('dbdiga-dialect', dialect); syncDialect(); }
-      firstRender = true;          // ensure a clean restore even if a model exists
-      rebuild({ restore: { positions: data.positions, camera: data.camera, annotations: data.annotations, hidden: data.hidden, manualLinks: data.manualLinks } });
-      saveLayout();
+      loadProject(data);
+      history.replaceState(null, '', location.pathname + location.search);
     } catch (err) {
       statusEl.textContent = 'Invalid project file';
       statusEl.className = 'status err';
@@ -859,41 +1012,44 @@ if (isEmbed) {
 }
 
 // ---- boot: shared link > last session > example ----
+async function loadSharedProject() {
+  const hash = location.hash;
+  try {
+    const data = await decodeShare(hash.slice(3));
+    if (location.hash === hash) {
+      loadProject(data);
+    }
+  } catch (error) {
+    console.error('Could not read shared link', error);
+    statusEl.textContent = 'Bad share link';
+    statusEl.className = 'status err';
+  }
+}
+
+window.addEventListener('hashchange', () => {
+  if (location.hash.startsWith('#s=')) {
+    loadSharedProject();
+  }
+});
+
 (async () => {
   // 1) shared link (#s=…) takes precedence
   if (location.hash.startsWith('#s=')) {
-    try {
-      const data = await decodeShare(location.hash.slice(3));
-      sqlEl.value = data.sql || '';
-      localStorage.setItem('dbdiga-sql', sqlEl.value);
-      if (data.dialect && DIALECTS[data.dialect]) {
-        dialect = data.dialect;
-        localStorage.setItem('dbdiga-dialect', dialect);
-        syncDialect();
-      }
-      if (data.format && FORMATS[data.format]) {
-        formatChoice = data.format;
-        localStorage.setItem('dbdiga-format', formatChoice);
-        syncFormat();
-      }
-      firstRender = true;
-      // a shared schema with no saved positions (e.g. gallery links) → auto-arrange
-      const hasPositions = data.positions && Object.keys(data.positions).length > 0;
-      if (hasPositions) {
-        rebuild({ restore: { positions: data.positions, camera: data.camera, annotations: data.annotations, hidden: data.hidden, manualLinks: data.manualLinks } });
-      } else {
-        rebuild({ arrange: true });
-      }
-      saveLayout();
-      return;
-    } catch (err) {
-      console.error('Could not read shared link', err);
-      statusEl.textContent = 'Bad share link';
-      statusEl.className = 'status err';
-    }
+    await loadSharedProject();
+    return;
   }
   // 2) last session
   const saved = localStorage.getItem('dbdiga-sql');
+  const savedComparison = localStorage.getItem(COMPARISON_KEY);
+  if (savedComparison) {
+    try {
+      const project = JSON.parse(savedComparison);
+      loadProject({ ...project, ...loadSavedLayout() });
+      return;
+    } catch {
+      localStorage.removeItem(COMPARISON_KEY);
+    }
+  }
   if (saved && saved.trim()) {
     sqlEl.value = saved;
     const savedLayout = loadSavedLayout();

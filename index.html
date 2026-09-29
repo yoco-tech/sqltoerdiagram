@@ -96,10 +96,14 @@
             <button id="btn-open" class="menu-item" title="Open a saved project (.json)">Open project…</button>
             <button id="btn-save" class="menu-item" title="Save SQL + layout to a file">Save project</button>
             <div class="menu-sep"></div>
+            <button id="btn-compare" class="menu-item" title="Highlight what changed against an older version of this schema">Compare with previous schema…</button>
+            <button id="btn-exit-comparison" class="menu-item" title="Keep the new schema and leave comparison mode" hidden>Exit comparison</button>
+            <div class="menu-sep"></div>
             <button id="btn-embed" class="menu-item" title="Get an &lt;iframe&gt; snippet to embed this diagram (read-only, live)">Embed diagram…</button>
           </div>
         </div>
         <input id="file-open" type="file" accept=".json,application/json" hidden />
+        <input id="previous-sql-open" type="file" accept=".sql,.ddl,.txt,text/plain" hidden />
         <div class="menu-wrap">
           <button id="btn-export" class="btn ghost caret" title="Export the diagram (image or code)">Export</button>
           <div id="export-menu" class="menu" hidden>
@@ -141,10 +145,15 @@
             <button class="seg-btn active" data-mode="code" role="tab" title="Edit the SQL">Code</button>
             <button class="seg-btn" data-mode="visual" role="tab" title="Edit tables &amp; columns visually">Visual</button>
           </div>
+          <div class="seg" id="comparison-toggle" role="tablist" aria-label="Schema version" hidden>
+            <button class="seg-btn" data-tab="previous" role="tab" title="Edit the previous schema">Previous</button>
+            <button class="seg-btn active" data-tab="new" role="tab" title="Edit the new schema">New</button>
+          </div>
           <span id="status" class="status"></span>
         </div>
         <div class="pane-head-right">
-          <div class="menu-wrap">
+          <button id="btn-exit-comparison-head" class="btn ghost compact" title="Keep the new schema and leave comparison mode" hidden>Exit comparison</button>
+          <div class="menu-wrap" id="format-wrap">
             <button id="btn-format" class="btn ghost caret compact" title="Input format (SQL · Prisma · DBML · Mermaid · PlantUML · SQLAlchemy · Sequelize)">Auto</button>
             <div id="format-menu" class="menu" hidden></div>
           </div>
@@ -171,7 +180,6 @@
 
     <section class="canvas-pane">
       <canvas id="canvas"></canvas>
-
       <button id="btn-open-sql" class="reopen-sql" title="Show SQL panel" aria-label="Show SQL panel">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>
@@ -308,5 +316,20 @@
   </section>
 
   <script type="module" src="/src/main.js"></script>
+  <div id="compare-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <span class="modal-title">Compare with a previous schema</span>
+        <button id="compare-close" class="modal-close icon-btn" aria-label="Close">✕</button>
+      </div>
+      <textarea id="compare-previous" class="modal-text" spellcheck="false" autocomplete="off" autocapitalize="off"
+        placeholder="Paste the previous schema's CREATE TABLE statements…"></textarea>
+      <div class="modal-actions">
+        <span class="modal-note">The SQL currently in the editor becomes the new schema.</span>
+        <button id="compare-open-file" class="btn ghost">Open .sql file…</button>
+        <button id="compare-run" class="btn primary">Compare</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
