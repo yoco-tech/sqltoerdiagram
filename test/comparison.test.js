@@ -8,6 +8,7 @@ import { compareSchemas, previousSchemaFromProject } from '../src/comparison.js'
 import { parseSchema } from '../src/parser.js';
 import { encodeShare, decodeShare } from '../src/share.js';
 import { columnY, ROW_H } from '../src/renderer.js';
+import { relationCardinality } from '../src/cardinality.js';
 
 test('retains deleted tables and columns alongside additions and unchanged columns', () => {
   const model = compareSchemas(
@@ -134,6 +135,67 @@ test('enum value changes preserve both versions for inspection', () => {
   const previous = "CREATE TYPE public.state AS ENUM ('open'); CREATE TABLE users (state public.state);";
   const model = compareSchemas(previous, previous.replace("('open')", "('open', 'closed')"));
   assert.deepEqual(model.tables[0].columns.map(column => column.enumValues), [['open'], ['open', 'closed']]);
+});
+
+test('quoted schema-qualified enum types retain their identities and value changes', () => {
+  for (const type of ['"public"."state"', '"Audit"."State"', '"Audit.Events"."State"']) {
+    const previous = `CREATE TYPE ${type} AS ENUM ('open'); CREATE TABLE tasks (state ${type});`;
+    const model = compareSchemas(previous, previous.replace("('open')", "('open', 'closed')"));
+    assert.deepEqual(model.tables[0].columns.map(column => [column.type, column.change, column.enumValues]), [
+      [type, 'removed', ['open']],
+      [type, 'added', ['open', 'closed']],
+    ]);
+  }
+});
+
+test('whitespace around quoted type qualification does not produce changes', () => {
+  const previous = 'CREATE TYPE "public"."state" AS ENUM (\'open\'); CREATE TABLE tasks (state "public"."state");';
+  const model = compareSchemas(previous, previous.replace('state "public"."state"', 'state "public" . "state"'));
+  assert.deepEqual(model.tables[0].columns.map(column => [column.change, column.enumValues]), [
+    [undefined, ['open']],
+  ]);
+});
+
+test('unchanged foreign keys use the current column constraints in comparisons', () => {
+  const optional = 'CREATE TABLE parents (id int PRIMARY KEY); CREATE TABLE children (parent_id int REFERENCES parents(id));';
+  const mandatory = optional.replace('parent_id int REFERENCES', 'parent_id int NOT NULL UNIQUE REFERENCES');
+  for (const [previous, current, expected] of [
+    [optional, mandatory, { from: 'one', to: 'one', label: 'one-to-one' }],
+    [mandatory, optional, { from: 'many', to: 'zero-or-one', label: 'one-to-many' }],
+  ]) {
+    const model = compareSchemas(previous, current);
+    const tables = new Map(model.tables.map(table => [table.key, table]));
+    assert.equal(model.relations[0].change, undefined);
+    assert.deepEqual(relationCardinality(model.relations[0], tables), expected);
+  }
+});
+
+test('added and removed foreign keys use their respective column constraints', () => {
+  const previous = 'CREATE TABLE parents (id int PRIMARY KEY, other_id int UNIQUE); CREATE TABLE children (parent_id int REFERENCES parents(id));';
+  const current = previous.replace('parent_id int REFERENCES parents(id)', 'parent_id int NOT NULL UNIQUE REFERENCES parents(other_id)');
+  const model = compareSchemas(previous, current);
+  const tables = new Map(model.tables.map(table => [table.key, table]));
+  assert.deepEqual(model.relations.map(relation => [relation.change, relationCardinality(relation, tables)]), [
+    ['added', { from: 'one', to: 'one', label: 'one-to-one' }],
+    ['removed', { from: 'many', to: 'zero-or-one', label: 'one-to-many' }],
+  ]);
+});
+
+test('comparison cardinality distinguishes quoted column case', () => {
+  const sql = 'CREATE TABLE parents (id int PRIMARY KEY); CREATE TABLE children (parent_id int, "Parent_ID" int NOT NULL UNIQUE REFERENCES parents(id));';
+  const model = compareSchemas(sql, sql);
+  const tables = new Map(model.tables.map(table => [table.key, table]));
+  assert.deepEqual(relationCardinality(model.relations[0], tables), {
+    from: 'one', to: 'one', label: 'one-to-one',
+  });
+});
+
+test('cardinality supports models without column keys or change metadata', () => {
+  const tables = new Map([['children', { columns: [{ name: 'parent_id', nn: true, unique: true }] }]]);
+  const relation = { fromTable: 'children', fromCols: ['PARENT_ID'] };
+  assert.deepEqual(relationCardinality(relation, tables), {
+    from: 'one', to: 'one', label: 'one-to-one',
+  });
 });
 
 test('parse errors identify the affected snapshot', () => {

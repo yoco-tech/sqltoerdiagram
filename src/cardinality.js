@@ -1,12 +1,21 @@
 
-export function relationCardinality(rel, byKey) {
-  const fromT = byKey.get(rel.fromKey ?? rel.fromTable.toLowerCase());
-  const fcName = rel.fromCols && rel.fromCols[0];
-  const fromCol = fromT && fcName
-    ? fromT.columns.find(c => c.name.toLowerCase() === String(fcName).toLowerCase())
+export function relationCardinality(relation, tablesByKey) {
+  const fromTable = tablesByKey.get(relation.fromKey ?? relation.fromTable.toLowerCase());
+  const columnName = relation.fromCols?.[0];
+  const columnKey = relation.fromColumnKeys?.[0];
+  const fromColumn = fromTable && columnName
+    ? fromTable.columns.find(column => {
+      const matches = columnKey !== undefined
+        ? column.key === columnKey
+        : column.name.toLowerCase() === String(columnName).toLowerCase();
+      const matchesVersion = relation.change === 'removed'
+        ? column.change !== 'added'
+        : column.change !== 'removed';
+      return matches && matchesVersion;
+    })
     : null;
-  const oneToOne = !!(fromCol && (fromCol.unique || fromCol.pk));
-  const mandatory = !!(fromCol && (fromCol.nn || fromCol.pk));
+  const oneToOne = !!(fromColumn && (fromColumn.unique || fromColumn.pk));
+  const mandatory = !!(fromColumn && (fromColumn.nn || fromColumn.pk));
   return {
     from: oneToOne ? 'one' : 'many',        // child (FK) side
     to: mandatory ? 'one' : 'zero-or-one',  // parent (referenced) side

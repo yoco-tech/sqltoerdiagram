@@ -109,7 +109,7 @@ function columnType(tokens) {
   const end = tokens.findIndex((token, index) => index > 0 && /^(?:not|null|default|primary|unique|references|check|constraint|collate|generated)$/i.test(token.text));
   const typeTokens = tokens.slice(1, end < 0 ? undefined : end);
   return typeTokens.map(token => token.text).join(' ')
-    .replace(/"(?:[^"]|"")*"|[^"]+/g, part => part.startsWith('"') ? part : part.toLowerCase().replace(/\s*([(),])\s*/g, '$1'));
+    .replace(/"(?:[^"]|"")*"|[^"]+/g, part => part.startsWith('"') ? part : part.toLowerCase().replace(/\s*([().,])\s*/g, '$1'));
 }
 
 // Tokenise a definition; each token carries absolute start/end offsets.
