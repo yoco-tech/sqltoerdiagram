@@ -3,25 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mermaid to ERD — Render a Mermaid erDiagram, Interactive</title>
-  <meta name="description" content="Paste a Mermaid erDiagram and turn it into an interactive ERD you can drag, arrange and export. Free, open source, runs in your browser." />
-  <meta name="keywords" content="mermaid to erd, mermaid erdiagram to diagram, render mermaid er diagram, interactive mermaid erd, mermaid er viewer" />
-  <link rel="canonical" href="https://sqltoerdiagram.com/mermaid-to-erd/" />
+  <title>BigQuery to ER Diagram — Visualize CTEs &amp; Schemas, Free</title>
+  <meta name="description" content="Paste a BigQuery WITH / CTE query or CREATE TABLE DDL and instantly render an interactive diagram. Free, open source, runs in your browser — nothing uploaded." />
+  <meta name="keywords" content="bigquery to er diagram, bigquery erd, bigquery cte diagram, visualize bigquery query, bigquery schema diagram, bigquery lineage" />
+  <link rel="canonical" href="https://sqltoerdiagram.com/bigquery/" />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://sqltoerdiagram.com/mermaid-to-erd/" />
-  <meta property="og:title" content="Mermaid to ERD — Render a Mermaid erDiagram, Interactive" />
-  <meta property="og:description" content="Paste a Mermaid erDiagram and turn it into an interactive ERD you can drag, arrange and export. Free, open source, runs in your browser." />
+  <meta property="og:url" content="https://sqltoerdiagram.com/bigquery/" />
+  <meta property="og:title" content="BigQuery to ER Diagram — Visualize CTEs &amp; Schemas, Free" />
+  <meta property="og:description" content="Paste a BigQuery WITH / CTE query or CREATE TABLE DDL and instantly render an interactive diagram. Free, open source, runs in your browser — nothing uploaded." />
   <meta property="og:image" content="https://sqltoerdiagram.com/og.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Mermaid to ERD — Render a Mermaid erDiagram, Interactive" />
+  <meta name="twitter:title" content="BigQuery to ER Diagram — Visualize CTEs &amp; Schemas, Free" />
   <meta name="twitter:image" content="https://sqltoerdiagram.com/og.png" />
   <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How do I turn Mermaid text into a diagram I can edit?","acceptedAnswer":{"@type":"Answer","text":"Paste the Mermaid erDiagram here — it renders as draggable tables you can arrange, then export as an image or convert to DBML/PlantUML."}},{"@type":"Question","name":"Is my schema uploaded anywhere?","acceptedAnswer":{"@type":"Answer","text":"No. Everything runs locally in your browser — your schema is never uploaded to or stored on any server."}},{"@type":"Question","name":"Is it free?","acceptedAnswer":{"@type":"Answer","text":"Yes. It is completely free and open source, with no account or sign-up required."}}]}
+  {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How do I visualize a BigQuery CTE query?","acceptedAnswer":{"@type":"Answer","text":"Paste your <code>WITH … AS (…)</code> query. Each CTE becomes a node, columns come from its SELECT list, and references to other CTEs or backtick-quoted <code>project.dataset.table</code> tables are drawn as edges."}},{"@type":"Question","name":"Does it work with BigQuery CREATE TABLE DDL too?","acceptedAnswer":{"@type":"Answer","text":"Yes — paste standard CREATE TABLE statements and it draws a classic ER diagram with foreign-key relations."}},{"@type":"Question","name":"Is my schema uploaded anywhere?","acceptedAnswer":{"@type":"Answer","text":"No. Everything runs locally in your browser — your schema is never uploaded to or stored on any server."}},{"@type":"Question","name":"Is it free?","acceptedAnswer":{"@type":"Answer","text":"Yes. It is completely free and open source, with no account or sign-up required."}}]}
   </script>
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SQL to ER Diagram","item":"https://sqltoerdiagram.com/"},{"@type":"ListItem","position":2,"name":"Mermaid to ERD","item":"https://sqltoerdiagram.com/mermaid-to-erd/"}]}
+  {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SQL to ER Diagram","item":"https://sqltoerdiagram.com/"},{"@type":"ListItem","position":2,"name":"BigQuery","item":"https://sqltoerdiagram.com/bigquery/"}]}
   </script>
   <style>
     :root { --bg:#0e1116; --panel:#161b22; --border:#262d38; --text:#e8edf4; --muted:#9aa4b2; --accent:#5aa7ff; }
@@ -80,48 +80,49 @@
     </div>
   </header>
   <main class="wrap">
-    <div class="crumb"><a href="/">Home</a> › Mermaid to ERD</div>
+    <div class="crumb"><a href="/">Home</a> › BigQuery</div>
     <div class="hero">
-      <h1>Mermaid to <span class="a">ERD</span></h1>
-      <p class="lead">Paste a <strong>Mermaid</strong> <code>erDiagram</code> and turn the text into a fully interactive ERD — drag tables, auto-arrange, and export to image, DBML or PlantUML.</p>
-      <a class="cta" href="/#s=zbYy7CsJAEEV_ZZg6KWy3NbERiUTtBBmz6zKQfTi72iT5d1lTCTYXzuFwJ6QYUaG-a7aEFb6NJA4e1abC9BxRoZGGyQq5qwfYXk7n7tD2MM91HSbo-qbtQUEcaTDpp5gKAbDPwBqO-xVTFvYWPDlTxFJmPfnfFxxeKQdn5MYadl-_YIWaaTRDRoUxpGzFJKzwEcRRcc6II9a4fAA">Open the diagram tool →</a>
+      <h1>BigQuery to <span class="a">ER Diagram</span></h1>
+      <p class="lead">Turn a <strong>BigQuery</strong> query into a diagram. Paste a <code>WITH … AS (…)</code> CTE query and each CTE becomes a node, with edges inferred from the <code>FROM</code> / <code>JOIN</code> tables it reads — or paste plain <code>CREATE TABLE</code> DDL for a classic ER diagram.</p>
+      <a class="cta" href="/#s=zbYzBCoJAFEV_5fFWGYPQ1l2EUVAEKbQZ0NGZbELnjTNaRPTvYYaLaHvPPeeJwlqMUBZSVwIZ3pTzmgxGC4a-rTHC0zbdQNn7jhrlPCwTmHEDkMS7eJWClgxUI3QN6-NhD7l1dA39hWw4KZkT95ybgHFDTv5pUDhUaDIyLQf6GxzlTw2Im4Cbrz8fryNHhlKLWpUdRmjJd5VTw3gm14hhK3TV9so98PUG">Open the diagram tool →</a>
       <div class="note">No signup · nothing uploaded · export PNG / SVG / Mermaid / DBML · shareable link</div>
     </div>
     <section><h2>How it works</h2><ol>
-        <li>Copy your Mermaid <code>erDiagram</code>.</li>
-        <li>Paste it into the editor — Mermaid is auto-detected.</li>
-        <li>Entities become draggable tables; relationships are drawn with cardinality.</li>
-        <li>Arrange, then export PNG/SVG or convert to DBML/PlantUML.</li>
+        <li>Copy a BigQuery <code>WITH</code> / CTE query, or your <code>CREATE TABLE</code> DDL.</li>
+        <li>Paste it into the editor — BigQuery CTE queries are auto-detected.</li>
+        <li>Each CTE becomes a node; columns come from its <code>SELECT</code> list, and <code>FROM</code>/<code>JOIN</code> references (including backtick <code>project.dataset.table</code>) are drawn as edges.</li>
+        <li>Arrange, hide nodes, then export PNG/SVG or convert to Mermaid/DBML.</li>
     </ol></section>
     <section><h2>Example</h2>
-      <p>A Mermaid erDiagram like this:</p>
-      <pre>erDiagram
-  CUSTOMER ||--o{ ORDER : places
-  CUSTOMER {
-    int id PK
-    string name
-  }
-  ORDER {
-    int id PK
-    int customer_id FK
-  }</pre>
-      <p>…becomes an interactive ERD with <code>CUSTOMER</code> linked to <code>ORDER</code>. <a href="/">Try it with your own &rarr;</a></p>
+      <p>A BigQuery CTE query like this:</p>
+      <pre>WITH customers AS (
+  SELECT id, email FROM `proj.shop.customers_raw`
+),
+orders AS (
+  SELECT o.id, o.customer_id
+  FROM `proj.shop.orders_raw` o
+)
+SELECT * FROM orders</pre>
+      <p>…renders <code>customers</code> and <code>orders</code> as nodes, linked to the base tables they read from. <a href="/">Try it with your own &rarr;</a></p>
     </section>
     <section><h2>Why use it</h2><ul>
         <li><strong>Private:</strong> everything runs in your browser — nothing is uploaded or stored on a server.</li>
-        <li><strong>Interactive</strong> — not a static image; drag and rearrange freely.</li>
-        <li><strong>Convert</strong> Mermaid to DBML, PlantUML, PNG or SVG.</li>
+        <li><strong>CTE lineage</strong> — see how each <code>WITH</code> step depends on tables and other CTEs.</li>
+        <li><strong>Interactive:</strong> drag tables, auto-arrange, hide noise, add notes, and manually link columns.</li>
+        <li><strong>Export</strong> a high-res PNG, vector SVG, or the schema as Mermaid / DBML / PlantUML code.</li>
         <li><strong>Free &amp; open source</strong> — no account, no sign-up.</li>
-    </ul><div class="badges"><span class="badge">Mermaid</span><span class="badge">DBML</span><span class="badge">PlantUML</span><span class="badge">PNG / SVG</span></div></section>
+    </ul><div class="badges"><span class="badge">BigQuery</span><span class="badge">CTE / WITH</span><span class="badge">Snowflake</span><span class="badge">SQL</span></div></section>
     <section><h2>FAQ</h2>
-      <h3>How do I turn Mermaid text into a diagram I can edit?</h3>
-      <p>Paste the Mermaid erDiagram here — it renders as draggable tables you can arrange, then export as an image or convert to DBML/PlantUML.</p>
+      <h3>How do I visualize a BigQuery CTE query?</h3>
+      <p>Paste your <code>WITH … AS (…)</code> query. Each CTE becomes a node, columns come from its SELECT list, and references to other CTEs or backtick-quoted <code>project.dataset.table</code> tables are drawn as edges.</p>
+      <h3>Does it work with BigQuery CREATE TABLE DDL too?</h3>
+      <p>Yes — paste standard CREATE TABLE statements and it draws a classic ER diagram with foreign-key relations.</p>
       <h3>Is my schema uploaded anywhere?</h3>
       <p>No. Everything runs locally in your browser — your schema is never uploaded to or stored on any server.</p>
       <h3>Is it free?</h3>
       <p>Yes. It is completely free and open source, with no account or sign-up required.</p>
     </section>
-    <section><h2>Related</h2><div class="related"><a href="/mermaid/">Mermaid to ER diagram</a><a href="/dbml-to-er-diagram/">DBML to ER diagram</a><a href="/sql-to-mermaid/">SQL to Mermaid</a><a href="/prisma/">Prisma to ER diagram</a><a href="/">SQL to ER Diagram (home)</a></div></section>
+    <section><h2>Related</h2><div class="related"><a href="/snowflake/">Snowflake to ER diagram</a><a href="/postgresql/">PostgreSQL to ER diagram</a><a href="/sql-to-mermaid/">SQL to Mermaid</a><a href="/mysql/">MySQL to ER diagram</a><a href="/">SQL to ER Diagram (home)</a></div></section>
   </main>
   <footer>
     <div class="wrap">

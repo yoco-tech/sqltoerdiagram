@@ -81,6 +81,51 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://sqltoerdiagram.com/oracle/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sqltoerdiagram.com/mariadb/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sqltoerdiagram.com/snowflake/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sqltoerdiagram.com/bigquery/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sqltoerdiagram.com/plantuml/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sqltoerdiagram.com/ddl-to-er-diagram/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sqltoerdiagram.com/sql-to-dbml/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sqltoerdiagram.com/sql-to-plantuml/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://sqltoerdiagram.com/dbml-to-mermaid/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://sqltoerdiagram.com/examples/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>

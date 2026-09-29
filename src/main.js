@@ -4,7 +4,8 @@ import { layout } from './layout.js';
 import { Diagram } from './diagram.js';
 import { exportSVG } from './svg-export.js';
 import { serialize, SERIALIZERS } from './formats/serialize.js';
-import { applyEdit, addColumn } from './edit.js';
+import { applyEdit, addColumn, deleteColumn, toggleConstraint, addTable, deleteTable } from './edit.js';
+import { createVisualEditor } from './visual-editor.js';
 import { DIALECTS, DEFAULT_DIALECT } from './dialects.js';
 import { highlightSQL } from './highlight.js';
 import { encodeShare, decodeShare } from './share.js';
@@ -23,6 +24,7 @@ const hlEl = $('hl');
 const diagram = new Diagram(canvas);
 diagram.onZoom = (s) => { zoomLabel.textContent = Math.round(s * 100) + '%'; };
 window.__dbdiga = diagram;   // debug handle
+let visualEditor = null;     // created after setup; refreshed on every model change
 
 // read-only embed view (?embed=1) — never editable, no matter the input format
 const isEmbed = new URLSearchParams(location.search).has('embed');
@@ -334,6 +336,7 @@ function rebuild({ arrange = false, restore = null } = {}) {
     if (cameraRestored) diagram.freezeViewport();
     else diagram.refitOnResize = true;
   }
+  if (visualEditor) visualEditor.render();
 }
 
 function updateStatus(result, sql) {
@@ -354,68 +357,66 @@ function updateStatus(result, sql) {
   }
 }
 
+// ---- shared commit: re-parse edited SQL, preserve positions, refresh views ----
+// Every model-mutating edit (canvas or visual panel) funnels through here so the
+// textarea, the diagram and the visual panel stay in lockstep.
+function commitSql(newSql, { pinKey = null, renameFrom = null, renameTo = null } = {}) {
+  sqlEl.value = newSql;
+  localStorage.setItem('dbdiga-sql', newSql);
+  syncHighlight();
+  // remember current positions so the edit doesn't reshuffle the diagram
+  const oldPos = new Map(diagram.model.tables.map(t => [t.key, { x: t.x, y: t.y }]));
+  const model = parseSchema(newSql, 'sql');
+  for (const t of model.tables) {
+    let p = oldPos.get(t.key);
+    if (!p && renameTo && t.key === renameTo) p = oldPos.get(renameFrom);   // renamed table keeps its spot
+    if (p && Number.isFinite(p.x)) { t.x = p.x; t.y = p.y; }
+  }
+  diagram.setModel(model);          // measures sizes, keeps the positions we set
+  placeNewTables(model);            // position any brand-new tables
+  if (pinKey) diagram.pinByKey(pinKey);
+  diagram.markDirty();
+  updateStatus(model, newSql);
+  lastModel = model;
+  saveLayoutDebounced();
+  renderTables();
+  if (visualEditor) visualEditor.render();
+}
+
 // ---- canvas editing: edit a table/column on the diagram -> rewrite SQL ----
-diagram.onEdit = (change) => {
+function applyChange(change) {
   const sql = sqlEl.value;
   const fresh = parseSchema(sql, 'sql');   // SQL parser for accurate spans
   const result = applyEdit(sql, fresh, change);
   if (!result) return;
-
-  sqlEl.value = result.sql;
-  localStorage.setItem('dbdiga-sql', result.sql);
-  syncHighlight();
-
-  // remember current positions so the edit doesn't reshuffle the diagram
-  const oldPos = new Map(diagram.model.tables.map(t => [t.key, { x: t.x, y: t.y }]));
-  const model = parseSchema(result.sql, 'sql');
-  for (const t of model.tables) {
-    let p = oldPos.get(t.key);
-    // a renamed table keeps the position of its old key
-    if (!p && change.kind === 'table' && t.key === result.newKey) p = oldPos.get(change.tableKey);
-    if (p && Number.isFinite(p.x)) { t.x = p.x; t.y = p.y; }
-  }
-  diagram.setModel(model);   // measures sizes, keeps the positions we set
-  diagram.markDirty();
-  updateStatus(model, result.sql);
-  lastModel = model;
-  saveLayoutDebounced();     // persist (a rename changes a table's key)
-};
+  commitSql(result.sql, { renameFrom: change.tableKey, renameTo: result.newKey });
+}
+diagram.onEdit = applyChange;
 
 // ---- dialect (drives default column type + type suggestions) ----
 let dialect = localStorage.getItem('dbdiga-dialect') || DEFAULT_DIALECT;
 if (!DIALECTS[dialect]) dialect = DEFAULT_DIALECT;
 diagram.typeSuggestions = DIALECTS[dialect].types;
 
-// ---- add column on the canvas -> insert into SQL with the dialect default ----
-diagram.onAddColumn = (tableKey) => {
+// ---- add a column with the dialect default; returns its name (or null) ----
+function addColumnTo(tableKey) {
   const sql = sqlEl.value;
   const fresh = parseSchema(sql, 'sql');
   const table = fresh.tables.find(t => t.key === tableKey);
-  if (!table) return;
-
+  if (!table) return null;
   // pick a unique default name
   const existing = new Set(table.columns.map(c => c.name.toLowerCase()));
   let name = 'new_column', i = 2;
   while (existing.has(name.toLowerCase())) name = `new_column_${i++}`;
-
   const res = addColumn(sql, fresh, tableKey, name, DIALECTS[dialect].default);
-  if (!res) return;
-
-  sqlEl.value = res.sql;
-  localStorage.setItem('dbdiga-sql', res.sql);
-  syncHighlight();
-
-  const oldPos = new Map(diagram.model.tables.map(t => [t.key, { x: t.x, y: t.y }]));
-  const model = parseSchema(res.sql, 'sql');
-  for (const t of model.tables) {
-    const p = oldPos.get(t.key);
-    if (p && Number.isFinite(p.x)) { t.x = p.x; t.y = p.y; }
-  }
-  diagram.setModel(model);
-  diagram.pinByKey(tableKey);          // keep the affordance visible
-  updateStatus(model, res.sql);
-  lastModel = model;
-  diagram.editColumn(tableKey, name);  // open the new column for naming
+  if (!res) return null;
+  commitSql(res.sql, { pinKey: tableKey });
+  return name;
+}
+// on the canvas: add the column, then open it inline for naming
+diagram.onAddColumn = (tableKey) => {
+  const name = addColumnTo(tableKey);
+  if (name) diagram.editColumn(tableKey, name);
 };
 
 // debounced live parsing; highlight repaints immediately (rAF-coalesced)
@@ -556,6 +557,72 @@ $('btn-open-sql').addEventListener('click', () => setSqlHidden(false));
 const savedSqlHidden = localStorage.getItem('dbdiga-sql-hidden');
 setSqlHidden(savedSqlHidden === null ? window.matchMedia('(max-width: 720px)').matches : savedSqlHidden === '1');
 
+// ---- Visual editor: a form-based lens on the same SQL ----
+const veActions = {
+  rename(kind, tableKey, colName, value) {
+    applyChange({ kind: kind === 'table' ? 'table' : 'column-name', tableKey, colName, value });
+  },
+  setType(tableKey, colName, value) {
+    applyChange({ kind: 'column-type', tableKey, colName, value });
+  },
+  toggleConstraint(tableKey, colName, kind, on) {
+    const sql = sqlEl.value;
+    const res = toggleConstraint(sql, parseSchema(sql, 'sql'), tableKey, colName, kind, on);
+    if (!res) return false;
+    commitSql(res.sql, { pinKey: tableKey });
+    return true;
+  },
+  deleteColumn(tableKey, colName) {
+    const sql = sqlEl.value;
+    const res = deleteColumn(sql, parseSchema(sql, 'sql'), tableKey, colName);
+    if (res) commitSql(res.sql, { pinKey: tableKey });
+  },
+  addColumn(tableKey) { return addColumnTo(tableKey); },
+  addTable() {
+    const sql = sqlEl.value;
+    const existing = new Set(parseSchema(sql, 'sql').tables.map(t => t.key));
+    let name = 'new_table', i = 2;
+    while (existing.has(name.toLowerCase())) name = `new_table_${i++}`;
+    const idType = DIALECTS[dialect].types.find(t => /int|serial|number/i.test(t)) || 'bigint';
+    const res = addTable(sql, name, idType);
+    if (!res) return null;
+    commitSql(res.sql, { pinKey: res.tableKey });
+    return { key: res.tableKey, name };
+  },
+  deleteTable(tableKey) {
+    const sql = sqlEl.value;
+    const res = deleteTable(sql, parseSchema(sql, 'sql'), tableKey);
+    if (res) commitSql(res.sql);
+  },
+  focusTable(tableKey) { diagram.centerOn(tableKey); diagram.pinByKey(tableKey); },
+};
+visualEditor = createVisualEditor({
+  mount: $('visual-editor'),
+  getModel: () => diagram.model,
+  getDialect: () => DIALECTS[dialect],
+  getEditable: () => diagram.editable,
+  getFormatLabel: () => FORMATS[lastModel && lastModel.format] || 'another format',
+  actions: veActions,
+});
+
+const modeToggle = $('mode-toggle');
+const visualPane = $('visual-editor');
+let editorMode = localStorage.getItem('dbdiga-mode') || 'code';
+function setMode(mode) {
+  editorMode = mode === 'visual' ? 'visual' : 'code';
+  localStorage.setItem('dbdiga-mode', editorMode);
+  layoutEl.classList.toggle('visual-mode', editorMode === 'visual');
+  visualPane.hidden = editorMode !== 'visual';
+  for (const b of modeToggle.querySelectorAll('.seg-btn'))
+    b.classList.toggle('active', b.dataset.mode === editorMode);
+  if (editorMode === 'visual') visualEditor.render();
+}
+modeToggle.addEventListener('click', (e) => {
+  const b = e.target.closest('.seg-btn');
+  if (b) setMode(b.dataset.mode);
+});
+setMode(editorMode);
+
 $('zoom-in').addEventListener('click', () => diagram.zoomBy(1.25));
 $('zoom-out').addEventListener('click', () => diagram.zoomBy(0.8));
 $('zoom-reset').addEventListener('click', () => diagram.resetZoom());
@@ -648,6 +715,12 @@ exportMenu.addEventListener('click', (e) => {
   showCodeModal(`Export — ${s.label}`, text, `schema.${s.ext}`);
 });
 document.addEventListener('click', () => { exportMenu.hidden = true; });
+
+// ---- File menu (open / save / embed) ----
+const fileBtn = $('btn-file');
+const fileMenu = $('file-menu');
+fileBtn.addEventListener('click', (e) => { e.stopPropagation(); fileMenu.hidden = !fileMenu.hidden; });
+document.addEventListener('click', () => { fileMenu.hidden = true; });
 
 // ---- Save / Open project (SQL + layout + camera + dialect) ----
 $('btn-save').addEventListener('click', () => {
@@ -797,6 +870,11 @@ if (isEmbed) {
         dialect = data.dialect;
         localStorage.setItem('dbdiga-dialect', dialect);
         syncDialect();
+      }
+      if (data.format && FORMATS[data.format]) {
+        formatChoice = data.format;
+        localStorage.setItem('dbdiga-format', formatChoice);
+        syncFormat();
       }
       firstRender = true;
       // a shared schema with no saved positions (e.g. gallery links) → auto-arrange

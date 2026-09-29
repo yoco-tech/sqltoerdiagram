@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { deflateRawSync } from 'node:zlib';
 import { PAGES } from './landing-data.mjs';
 import { GALLERY } from './gallery-data.mjs';
+import { detectFormat } from '../src/parse.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ORIGIN = 'https://sqltoerdiagram.com';
@@ -19,7 +20,9 @@ function encodeShare(obj) {
   const b64 = bytes.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   return 'z' + b64;
 }
-const shareHash = (sql, dialect = 'postgres') => '#s=' + encodeShare({ app: 'dbdiga', version: 1, sql, dialect });
+const DIALECT_BY_SLUG = { mysql: 'mysql', mariadb: 'mysql', postgresql: 'postgres', sqlite: 'sqlite', 'sql-server': 'sqlserver', snowflake: 'snowflake' };
+const shareHash = (sql, { dialect = 'postgres', format } = {}) =>
+  '#s=' + encodeShare({ app: 'dbdiga', version: 1, sql, dialect, ...(format ? { format } : {}) });
 
 const STYLE = `<style>
     :root { --bg:#0e1116; --panel:#161b22; --border:#262d38; --text:#e8edf4; --muted:#9aa4b2; --accent:#5aa7ff; }
@@ -82,6 +85,7 @@ const FOOTER = `<footer>
       <a href="/">SQL to ER Diagram</a>
       <a href="/examples/">Schema examples</a>
       <a href="${GH}" target="_blank" rel="noopener">Open source on GitHub</a>
+      <a href="https://yourbrowsercandoit.com/" target="_blank" rel="noopener">Part of yourbrowsercandoit.com ↗</a>
       <span>Free · runs in your browser</span>
     </div>
   </footer>`;
@@ -144,7 +148,7 @@ function landingPage(p) {
     <div class="hero">
       <h1>${p.h1}</h1>
       <p class="lead">${p.lead}</p>
-      <a class="cta" href="/">Open the diagram tool →</a>
+      <a class="cta" href="/${shareHash(p.example, { dialect: DIALECT_BY_SLUG[p.slug], format: detectFormat(p.example) })}">Open the diagram tool →</a>
       <div class="note">No signup · nothing uploaded · export PNG / SVG / Mermaid / DBML · shareable link</div>
     </div>
     <section><h2>How it works</h2><ol>
