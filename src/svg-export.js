@@ -1,6 +1,29 @@
 // Build a standalone SVG string of the current diagram (vector, theme-aware).
 import { THEMES, columnY, headerTextLayout, typeLabel, ROW_H, HEADER_H } from './renderer.js';
 import { NOTE_COLORS, GROUP_COLORS } from './annotations.js';
+import { relationCardinality } from './cardinality.js';
+
+// Crow's-foot cardinality marker at a line endpoint (world coords).
+//   dir = +1 if the line extends in +x from (x,y), else -1.
+function svgMarker(x, y, dir, kind, color) {
+  const foot = 11, spread = 5.5, r = 3.2;
+  const attr = `fill="none" stroke="${color}" stroke-width="1.5"`;
+  const many = kind === 'many' || kind === 'zero-or-many';
+  const optional = kind === 'zero-or-one' || kind === 'zero-or-many';
+  let out = '';
+  if (many) {
+    const ax = x + dir * foot;
+    out += `<path d="M ${ax} ${y} L ${x} ${y - spread} M ${ax} ${y} L ${x} ${y + spread} M ${ax} ${y} L ${x} ${y}" ${attr}/>`;
+  } else {
+    const bx = x + dir * foot;
+    out += `<path d="M ${bx} ${y - spread} L ${bx} ${y + spread}" ${attr}/>`;
+  }
+  if (optional) {
+    const cx = x + dir * (foot + r + 2);
+    out += `<circle cx="${cx}" cy="${y}" r="${r}" ${attr}/>`;
+  }
+  return out;
+}
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
   .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -57,8 +80,9 @@ export function exportSVG(model, themeName, annotations = [], hidden = null) {
     const c1x = fx + (fromRight ? dx : -dx);
     const c2x = tx + (fromRight ? -dx : dx);
     parts.push(`<path d="M ${fx} ${fy} C ${c1x} ${fy}, ${c2x} ${ty}, ${tx} ${ty}" fill="none" stroke="${theme.edge}" stroke-width="1.5"/>`);
-    parts.push(`<circle cx="${fx}" cy="${fy}" r="3" fill="${theme.edge}"/>`);
-    parts.push(`<circle cx="${tx}" cy="${ty}" r="3" fill="${theme.edge}"/>`);
+    const card = relationCardinality(r, byKey);
+    parts.push(svgMarker(fx, fy, Math.sign(c1x - fx) || 1, card.from, theme.edge));
+    parts.push(svgMarker(tx, ty, Math.sign(c2x - tx) || 1, card.to, theme.edge));
   }
 
   // tables

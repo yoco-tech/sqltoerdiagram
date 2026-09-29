@@ -3,25 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mermaid to ERD — Render a Mermaid erDiagram, Interactive</title>
-  <meta name="description" content="Paste a Mermaid erDiagram and turn it into an interactive ERD you can drag, arrange and export. Free, open source, runs in your browser." />
-  <meta name="keywords" content="mermaid to erd, mermaid erdiagram to diagram, render mermaid er diagram, interactive mermaid erd, mermaid er viewer" />
-  <link rel="canonical" href="https://sqltoerdiagram.com/mermaid-to-erd/" />
+  <title>DDL to ER Diagram — Turn SQL DDL into a Diagram, Free</title>
+  <meta name="description" content="Paste your SQL DDL (CREATE TABLE / ALTER TABLE) and instantly generate an interactive ER diagram. Free, open source, runs in your browser — nothing uploaded." />
+  <meta name="keywords" content="ddl to er diagram, ddl to erd, sql ddl diagram, create table to er diagram, generate er diagram from ddl, ddl visualizer" />
+  <link rel="canonical" href="https://sqltoerdiagram.com/ddl-to-er-diagram/" />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://sqltoerdiagram.com/mermaid-to-erd/" />
-  <meta property="og:title" content="Mermaid to ERD — Render a Mermaid erDiagram, Interactive" />
-  <meta property="og:description" content="Paste a Mermaid erDiagram and turn it into an interactive ERD you can drag, arrange and export. Free, open source, runs in your browser." />
+  <meta property="og:url" content="https://sqltoerdiagram.com/ddl-to-er-diagram/" />
+  <meta property="og:title" content="DDL to ER Diagram — Turn SQL DDL into a Diagram, Free" />
+  <meta property="og:description" content="Paste your SQL DDL (CREATE TABLE / ALTER TABLE) and instantly generate an interactive ER diagram. Free, open source, runs in your browser — nothing uploaded." />
   <meta property="og:image" content="https://sqltoerdiagram.com/og.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Mermaid to ERD — Render a Mermaid erDiagram, Interactive" />
+  <meta name="twitter:title" content="DDL to ER Diagram — Turn SQL DDL into a Diagram, Free" />
   <meta name="twitter:image" content="https://sqltoerdiagram.com/og.png" />
   <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How do I turn Mermaid text into a diagram I can edit?","acceptedAnswer":{"@type":"Answer","text":"Paste the Mermaid erDiagram here — it renders as draggable tables you can arrange, then export as an image or convert to DBML/PlantUML."}},{"@type":"Question","name":"Is my schema uploaded anywhere?","acceptedAnswer":{"@type":"Answer","text":"No. Everything runs locally in your browser — your schema is never uploaded to or stored on any server."}},{"@type":"Question","name":"Is it free?","acceptedAnswer":{"@type":"Answer","text":"Yes. It is completely free and open source, with no account or sign-up required."}}]}
+  {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What counts as DDL?","acceptedAnswer":{"@type":"Answer","text":"Data Definition Language — the <code>CREATE TABLE</code>, <code>ALTER TABLE</code> and constraint statements that define your schema. Paste them and the diagram is drawn instantly."}},{"@type":"Question","name":"Does it read ALTER TABLE foreign keys?","acceptedAnswer":{"@type":"Answer","text":"Yes — foreign keys added via <code>ALTER TABLE … ADD CONSTRAINT … FOREIGN KEY</code> (as pg_dump emits) are parsed and drawn as relations."}},{"@type":"Question","name":"Is my schema uploaded anywhere?","acceptedAnswer":{"@type":"Answer","text":"No. Everything runs locally in your browser — your schema is never uploaded to or stored on any server."}},{"@type":"Question","name":"Is it free?","acceptedAnswer":{"@type":"Answer","text":"Yes. It is completely free and open source, with no account or sign-up required."}}]}
   </script>
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SQL to ER Diagram","item":"https://sqltoerdiagram.com/"},{"@type":"ListItem","position":2,"name":"Mermaid to ERD","item":"https://sqltoerdiagram.com/mermaid-to-erd/"}]}
+  {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SQL to ER Diagram","item":"https://sqltoerdiagram.com/"},{"@type":"ListItem","position":2,"name":"DDL to ER Diagram","item":"https://sqltoerdiagram.com/ddl-to-er-diagram/"}]}
   </script>
   <style>
     :root { --bg:#0e1116; --panel:#161b22; --border:#262d38; --text:#e8edf4; --muted:#9aa4b2; --accent:#5aa7ff; }
@@ -80,48 +80,54 @@
     </div>
   </header>
   <main class="wrap">
-    <div class="crumb"><a href="/">Home</a> › Mermaid to ERD</div>
+    <div class="crumb"><a href="/">Home</a> › DDL to ER Diagram</div>
     <div class="hero">
-      <h1>Mermaid to <span class="a">ERD</span></h1>
-      <p class="lead">Paste a <strong>Mermaid</strong> <code>erDiagram</code> and turn the text into a fully interactive ERD — drag tables, auto-arrange, and export to image, DBML or PlantUML.</p>
-      <a class="cta" href="/#s=zbYy7CsJAEEV_ZZg6KWy3NbERiUTtBBmz6zKQfTi72iT5d1lTCTYXzuFwJ6QYUaG-a7aEFb6NJA4e1abC9BxRoZGGyQq5qwfYXk7n7tD2MM91HSbo-qbtQUEcaTDpp5gKAbDPwBqO-xVTFvYWPDlTxFJmPfnfFxxeKQdn5MYadl-_YIWaaTRDRoUxpGzFJKzwEcRRcc6II9a4fAA">Open the diagram tool →</a>
+      <h1>DDL to <span class="a">ER Diagram</span></h1>
+      <p class="lead">Paste your database <strong>DDL</strong> — the <code>CREATE TABLE</code> and <code>ALTER TABLE</code> statements that define your schema — and get an interactive ER diagram with every table, column and foreign key drawn automatically.</p>
+      <a class="cta" href="/#s=zhZDNTsMwEIRfZbWnRPKBckxPbrptI4KDtgapUqTIxWkbtbVDHLgg3h2Zf7hw3Zn5RrPPaPoeM7Rb2-0NCnxqh9B5h9lEYHg4YYY5k9QEWs5KAvM4HvwQIKkdQGdhViwLpeGGi2vJG7iijYiKM-cW7iTnK8nJ5PIiBVVpULdlWbt0Wrva_aJuvT_-y3yvbr4Nf5Gy1MQ_iTEl53PIK7XWLGNmd2zepOZjSLQsKqZiqWIRJF8tKTAtiEnltP6cnXQ2naJA25lTez9ihr0P435oAwrc-eFs4i2-7eUV">Open the diagram tool →</a>
       <div class="note">No signup · nothing uploaded · export PNG / SVG / Mermaid / DBML · shareable link</div>
     </div>
     <section><h2>How it works</h2><ol>
-        <li>Copy your Mermaid <code>erDiagram</code>.</li>
-        <li>Paste it into the editor — Mermaid is auto-detected.</li>
-        <li>Entities become draggable tables; relationships are drawn with cardinality.</li>
-        <li>Arrange, then export PNG/SVG or convert to DBML/PlantUML.</li>
+        <li>Copy your DDL from a migration, schema dump, or your database client.</li>
+        <li>Paste it into the editor — PostgreSQL, MySQL, SQLite, SQL Server, Oracle and Snowflake DDL all parse.</li>
+        <li>Tables render with columns; inline <code>REFERENCES</code> and <code>FOREIGN KEY</code> constraints become relations.</li>
+        <li>Arrange, hide tables, then export PNG/SVG or convert to Mermaid/DBML.</li>
     </ol></section>
     <section><h2>Example</h2>
-      <p>A Mermaid erDiagram like this:</p>
-      <pre>erDiagram
-  CUSTOMER ||--o{ ORDER : places
-  CUSTOMER {
-    int id PK
-    string name
-  }
-  ORDER {
-    int id PK
-    int customer_id FK
-  }</pre>
-      <p>…becomes an interactive ERD with <code>CUSTOMER</code> linked to <code>ORDER</code>. <a href="/">Try it with your own &rarr;</a></p>
+      <p>DDL like this:</p>
+      <pre>CREATE TABLE authors (
+  id BIGINT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL
+);
+
+CREATE TABLE books (
+  id BIGINT PRIMARY KEY,
+  author_id BIGINT NOT NULL
+);
+
+ALTER TABLE books
+  ADD CONSTRAINT fk_books_authors
+  FOREIGN KEY (author_id) REFERENCES authors(id);</pre>
+      <p>…renders two tables with a relation from <code>books.author_id</code> → <code>authors.id</code>, including the <code>ALTER TABLE</code> foreign key. <a href="/">Try it with your own &rarr;</a></p>
     </section>
     <section><h2>Why use it</h2><ul>
         <li><strong>Private:</strong> everything runs in your browser — nothing is uploaded or stored on a server.</li>
-        <li><strong>Interactive</strong> — not a static image; drag and rearrange freely.</li>
-        <li><strong>Convert</strong> Mermaid to DBML, PlantUML, PNG or SVG.</li>
+        <li><strong>Dialect-agnostic</strong> — paste DDL from any major database.</li>
+        <li><strong>Interactive:</strong> drag tables, auto-arrange, hide noise, add notes, and manually link columns.</li>
+        <li><strong>Export</strong> a high-res PNG, vector SVG, or the schema as Mermaid / DBML / PlantUML code.</li>
         <li><strong>Free &amp; open source</strong> — no account, no sign-up.</li>
-    </ul><div class="badges"><span class="badge">Mermaid</span><span class="badge">DBML</span><span class="badge">PlantUML</span><span class="badge">PNG / SVG</span></div></section>
+    </ul><div class="badges"><span class="badge">DDL</span><span class="badge">PostgreSQL</span><span class="badge">MySQL</span><span class="badge">Oracle</span><span class="badge">SQL Server</span></div></section>
     <section><h2>FAQ</h2>
-      <h3>How do I turn Mermaid text into a diagram I can edit?</h3>
-      <p>Paste the Mermaid erDiagram here — it renders as draggable tables you can arrange, then export as an image or convert to DBML/PlantUML.</p>
+      <h3>What counts as DDL?</h3>
+      <p>Data Definition Language — the <code>CREATE TABLE</code>, <code>ALTER TABLE</code> and constraint statements that define your schema. Paste them and the diagram is drawn instantly.</p>
+      <h3>Does it read ALTER TABLE foreign keys?</h3>
+      <p>Yes — foreign keys added via <code>ALTER TABLE … ADD CONSTRAINT … FOREIGN KEY</code> (as pg_dump emits) are parsed and drawn as relations.</p>
       <h3>Is my schema uploaded anywhere?</h3>
       <p>No. Everything runs locally in your browser — your schema is never uploaded to or stored on any server.</p>
       <h3>Is it free?</h3>
       <p>Yes. It is completely free and open source, with no account or sign-up required.</p>
     </section>
-    <section><h2>Related</h2><div class="related"><a href="/mermaid/">Mermaid to ER diagram</a><a href="/dbml-to-er-diagram/">DBML to ER diagram</a><a href="/sql-to-mermaid/">SQL to Mermaid</a><a href="/prisma/">Prisma to ER diagram</a><a href="/">SQL to ER Diagram (home)</a></div></section>
+    <section><h2>Related</h2><div class="related"><a href="/postgresql/">PostgreSQL to ER diagram</a><a href="/mysql/">MySQL to ER diagram</a><a href="/oracle/">Oracle to ER diagram</a><a href="/sql-server/">SQL Server to ER diagram</a><a href="/">SQL to ER Diagram (home)</a></div></section>
   </main>
   <footer>
     <div class="wrap">

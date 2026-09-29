@@ -3,6 +3,8 @@
 // what is on screen.
 import { THEMES, rasterizeTable, columnY, measureTable, ROW_H, HEADER_H } from './renderer.js';
 import { NOTE_COLORS, GROUP_COLORS, NOTE_ORDER, GROUP_ORDER, makeAnnotation } from './annotations.js';
+import { relationCardinality } from './cardinality.js';
+import { inferLinks as inferLinksCore } from './infer-links.js';
 
 export class Diagram {
   constructor(canvas) {
@@ -650,15 +652,18 @@ export class Diagram {
     const fadeAlpha = this.pinned ? 0.05 : 0.16;   // pinned fades harder than transient hover
     const highlighted = [];
 
-    // FK relations + user-defined manual links (latter drawn dashed)
+    // FK relations + user-defined manual links (latter drawn dashed).
+    // FK relations carry crow's-foot cardinality; manual links stay neutral.
+    const byKey = this._tableMap();
     const edges = [];
-    for (const r of this.model.relations) edges.push({ fk: r.fromTable.toLowerCase(), tk: r.toTable.toLowerCase(), fc: r.fromCols[0], tc: r.toCols[0], manual: false });
-    for (const l of this.manualLinks) edges.push({ fk: l.from.table, tk: l.to.table, fc: l.from.col, tc: l.to.col, manual: true });
+    for (const r of this.model.relations) edges.push({ fk: r.fromTable.toLowerCase(), tk: r.toTable.toLowerCase(), fc: r.fromCols[0], tc: r.toCols[0], manual: false, card: relationCardinality(r, byKey) });
+    for (const l of this.manualLinks) edges.push({ fk: l.from.table, tk: l.to.table, fc: l.from.col, tc: l.to.col, manual: true, card: null });
 
     for (const e of edges) {
       const seg = this._edgeSeg(e.fk, e.fc, e.tk, e.tc, cull);
       if (!seg) continue;
       seg.manual = e.manual;
+      seg.card = e.card;
       const connected = focusKey && (seg.fromKey === focusKey || seg.toKey === focusKey);
       if (focusKey) {
         if (connected) { highlighted.push(seg); continue; }
@@ -668,12 +673,14 @@ export class Diagram {
       }
     }
     for (const seg of highlighted) this._stroke(seg, theme.edgeHi, 2.2, 1, seg.manual);
+    for (const seg of highlighted) this._drawEdgeLabel(seg);   // words, on top of the lines
   }
 
   _stroke(seg, color, width, alpha, dashed) {
     const { ctx, cam } = this;
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = color;
+    ctx.fillStyle = color;
     ctx.lineWidth = width / cam.scale;
     if (dashed) ctx.setLineDash([6 / cam.scale, 5 / cam.scale]);
     ctx.beginPath();
@@ -681,10 +688,43 @@ export class Diagram {
     ctx.bezierCurveTo(seg.c1x, seg.fy, seg.c2x, seg.ty, seg.tx, seg.ty);
     ctx.stroke();
     if (dashed) ctx.setLineDash([]);
-    ctx.fillStyle = color;
-    dot(ctx, seg.fx, seg.fy, 3 / cam.scale);
-    dot(ctx, seg.tx, seg.ty, 3 / cam.scale);
+    if (seg.card) {
+      // markers sit just outside each table, pointing along the line
+      const s = 1 / cam.scale;
+      const mw = Math.max(width, 1.4) / cam.scale;
+      drawMarker(ctx, seg.fx, seg.fy, Math.sign(seg.c1x - seg.fx) || 1, seg.card.from, s, mw);
+      drawMarker(ctx, seg.tx, seg.ty, Math.sign(seg.c2x - seg.tx) || 1, seg.card.to, s, mw);
+    } else {
+      dot(ctx, seg.fx, seg.fy, 3 / cam.scale);
+      dot(ctx, seg.tx, seg.ty, 3 / cam.scale);
+    }
     ctx.globalAlpha = 1;
+  }
+
+  // A small "one-to-many" pill at a highlighted edge's midpoint.
+  _drawEdgeLabel(seg) {
+    if (!seg.card || !seg.card.label) return;
+    const { ctx, cam } = this;
+    const s = 1 / cam.scale;
+    const mx = (seg.fx + 3 * seg.c1x + 3 * seg.c2x + seg.tx) / 8;
+    const my = (seg.fy + seg.ty) / 2;
+    ctx.save();
+    ctx.font = `${11 * s}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const text = seg.card.label;
+    const w = ctx.measureText(text).width + 10 * s;
+    const h = 16 * s;
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = this.theme.tableBg;
+    roundRectPath(ctx, mx - w / 2, my - h / 2, w, h, 5 * s);
+    ctx.fill();
+    ctx.strokeStyle = this.theme.edgeHi;
+    ctx.lineWidth = 1 * s;
+    ctx.stroke();
+    ctx.fillStyle = this.theme.edgeHi;
+    ctx.fillText(text, mx, my);
+    ctx.restore();
   }
 
   _tableMap() {
@@ -1211,52 +1251,13 @@ export class Diagram {
 
   // heuristic auto-linking by column name; returns count added
   inferLinks() {
-    const tables = this.model.tables;
-    const pkByCol = new Map();        // lowercased PK col name -> [tableKey]
-    const tableByName = new Map();    // name forms -> key
-    for (const t of tables) {
-      for (const c of t.columns) if (c.pk) {
-        const k = c.name.toLowerCase();
-        if (!pkByCol.has(k)) pkByCol.set(k, []);
-        pkByCol.get(k).push(t.key);
-      }
-      tableByName.set(t.key, t.key);
-      tableByName.set(t.key.replace(/(es|s)$/, ''), t.key);
-    }
-    const seen = new Set();
-    const ek = (a, c, b, d) => `${a}.${c.toLowerCase()}->${b}.${d.toLowerCase()}`;
-    for (const r of this.model.relations) seen.add(ek(r.fromTable.toLowerCase(), r.fromCols[0] || '', r.toTable.toLowerCase(), r.toCols[0] || ''));
-    for (const l of this.manualLinks) seen.add(ek(l.from.table, l.from.col, l.to.table, l.to.col));
-
-    const added = [];
-    for (const t of tables) {
-      for (const c of t.columns) {
-        if (c.pk) continue;
-        const cl = c.name.toLowerCase();
-        let tk = null, tc = null;
-        // 1) column name matches exactly one other table's PK column
-        if (pkByCol.has(cl)) {
-          const owners = pkByCol.get(cl).filter(k => k !== t.key);
-          if (owners.length === 1) { tk = owners[0]; tc = c.name; }
-        }
-        // 2) <foo>_id / <foo>id / <foo>_uuid -> table foo / foos, on matching column or PK
-        if (!tk) {
-          const m = cl.match(/^(.+?)_?(id|uuid)$/);
-          if (m && m[1]) {
-            const cand = tableByName.get(m[1]) || tableByName.get(m[1] + 's') || tableByName.get(m[1] + 'es');
-            if (cand && cand !== t.key) {
-              const cols = (tables.find(x => x.key === cand)?.columns || []);
-              const col = cols.find(x => x.name.toLowerCase() === m[2]) || cols.find(x => x.pk);
-              if (col) { tk = cand; tc = col.name; }
-            }
-          }
-        }
-        if (tk && !seen.has(ek(t.key, c.name, tk, tc)) && !seen.has(ek(tk, tc, t.key, c.name))) {
-          seen.add(ek(t.key, c.name, tk, tc));
-          added.push({ from: { table: t.key, col: c.name }, to: { table: tk, col: tc } });
-        }
-      }
-    }
+    // Shared heuristic (see infer-links.js). It dedupes against model.relations
+    // and our manual links, and returns new links in relation shape; adapt them
+    // to the manual-link shape this diagram stores.
+    const added = inferLinksCore(this.model, this.manualLinks).map(r => ({
+      from: { table: r.fromTable, col: r.fromCols[0] },
+      to: { table: r.toTable, col: r.toCols[0] },
+    }));
     this.manualLinks.push(...added);
     if (added.length) { this.markDirty(); this.onLayoutChange?.(); }
     return added.length;
@@ -1504,6 +1505,36 @@ function dot(ctx, x, y, r) {
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
+}
+
+// Crow's-foot cardinality marker at a line endpoint on a table edge.
+//   (x,y) = the point on the table edge; dir = +1 if the line extends in +x
+//   from here, -1 if -x. `s` = world-units-per-screen-pixel (1/scale).
+//   kind ∈ 'one' | 'many' | 'zero-or-one' | 'zero-or-many'. lw = line width.
+function drawMarker(ctx, x, y, dir, kind, s, lw) {
+  const foot = 11 * s;     // distance from edge to crow's-foot apex / bar tick
+  const spread = 5.5 * s;  // half-height of the foot / bar
+  const r = 3.2 * s;       // optionality ("zero") ring radius
+  const many = kind === 'many' || kind === 'zero-or-many';
+  const optional = kind === 'zero-or-one' || kind === 'zero-or-many';
+  ctx.lineWidth = lw;
+  ctx.beginPath();
+  if (many) {
+    const ax = x + dir * foot;                       // apex out along the line
+    ctx.moveTo(ax, y); ctx.lineTo(x, y - spread);    // three prongs back to edge
+    ctx.moveTo(ax, y); ctx.lineTo(x, y + spread);
+    ctx.moveTo(ax, y); ctx.lineTo(x, y);
+  } else {
+    const bx = x + dir * foot;                        // single bar ("one")
+    ctx.moveTo(bx, y - spread); ctx.lineTo(bx, y + spread);
+  }
+  ctx.stroke();
+  if (optional) {
+    const cx = x + dir * (foot + r + 2 * s);          // hollow "zero" ring, outermost
+    ctx.beginPath();
+    ctx.arc(cx, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 }
 function roundRectPath(ctx, x, y, w, h, r) {
   ctx.beginPath();

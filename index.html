@@ -3,20 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SQL to ER Diagram — Free Online ERD Generator from SQL (no signup)</title>
-  <meta name="description" content="SQL to ER diagram: paste your SQL schema (CREATE TABLE statements) and instantly generate a clean, interactive ER diagram (ERD) online. Also supports Prisma, SQLAlchemy and Sequelize. Free, open source, runs entirely in your browser — no signup, nothing uploaded." />
-  <meta name="keywords" content="sql to er diagram, sql to diagram, sqltoerdiagram, er diagram from sql, generate er diagram from sql, ddl to erd, database schema diagram, sql schema visualizer, create er diagram from sql, prisma to er diagram, prisma schema visualizer, sqlalchemy er diagram, sequelize er diagram" />
+  <title>SQL to ER Diagram — Free Online SQL Diagram &amp; ERD Generator</title>
+  <meta name="description" content="Convert SQL to an ER diagram online. Paste your CREATE TABLE / DDL and instantly visualize your database schema — a free, in-browser SQL schema visualizer and SQL-to-ERD converter. Also reads Prisma, DBML, Mermaid, SQLAlchemy & Sequelize. No signup, nothing uploaded." />
+  <meta name="keywords" content="sql to er diagram, sql to diagram, sql diagram generator, sql to erd, sql to erd converter, convert sql to diagram, erd generator from sql, ddl to er diagram, database diagram generator, sql schema visualizer, er diagram from sql, generate er diagram from sql, dbml to mermaid, prisma schema visualizer" />
   <link rel="canonical" href="https://sqltoerdiagram.com/" />
 
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://sqltoerdiagram.com/" />
-  <meta property="og:title" content="SQL to ER Diagram — Free Online ERD Generator from SQL" />
+  <meta property="og:title" content="SQL to ER Diagram — Free Online SQL Diagram &amp; ERD Generator" />
   <meta property="og:description" content="Paste a SQL schema and instantly generate a clean, interactive ER diagram. Free, open source, runs in your browser — nothing uploaded." />
   <meta property="og:image" content="https://sqltoerdiagram.com/og.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="SQL to ER Diagram — Free Online ERD Generator from SQL" />
+  <meta name="twitter:title" content="SQL to ER Diagram — Free Online SQL Diagram &amp; ERD Generator" />
   <meta name="twitter:description" content="Paste a SQL schema, get an interactive ER diagram. Free, open source, in-browser." />
   <meta name="twitter:image" content="https://sqltoerdiagram.com/og.png" />
 
@@ -41,8 +41,12 @@
     "mainEntity": [
       { "@type": "Question", "name": "How do I create an ER diagram from SQL?",
         "acceptedAnswer": { "@type": "Answer", "text": "Paste your SQL CREATE TABLE statements into the editor and SQL to ER Diagram instantly renders an interactive entity-relationship diagram. Drag tables to arrange them, then export as PNG or SVG." } },
+      { "@type": "Question", "name": "How do I convert SQL to a diagram online?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Paste your SQL CREATE TABLE statements or DDL and SQL to ER Diagram instantly converts them into an interactive diagram you can drag, arrange and export to PNG, SVG, Mermaid, DBML or PlantUML — a free online SQL-to-diagram converter, no signup." } },
+      { "@type": "Question", "name": "Is this a SQL schema visualizer?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Yes. It visualizes any SQL database schema as an entity-relationship diagram — every table, column, key and foreign-key relationship — and works with PostgreSQL, MySQL, MariaDB, SQLite, SQL Server, Oracle, Snowflake and BigQuery." } },
       { "@type": "Question", "name": "Which SQL dialects are supported?",
-        "acceptedAnswer": { "@type": "Answer", "text": "It parses standard CREATE TABLE and ALTER TABLE DDL and works with PostgreSQL, MySQL, SQLite, SQL Server, Snowflake and BigQuery syntax, including primary keys, foreign keys, unique and not-null constraints." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "It parses standard CREATE TABLE and ALTER TABLE DDL and works with PostgreSQL, MySQL, MariaDB, SQLite, SQL Server, Oracle, Snowflake and BigQuery syntax, including primary keys, foreign keys, unique and not-null constraints." } },
       { "@type": "Question", "name": "Is it free?",
         "acceptedAnswer": { "@type": "Answer", "text": "Yes. SQL to ER Diagram is completely free and open source, with no account or sign-up required." } },
       { "@type": "Question", "name": "Is my data private? Does my SQL get uploaded?",
@@ -62,7 +66,7 @@
 
 </head>
 <body>
-  <h1 class="sr-only">SQL to ER Diagram — free online ERD generator: convert a SQL schema (CREATE TABLE statements) into an interactive entity-relationship diagram in your browser. Turn SQL into a diagram instantly, no signup.</h1>
+  <h1 class="sr-only">SQL to ER Diagram — a free online SQL diagram generator and database schema visualizer. Convert a SQL schema (CREATE TABLE / DDL) into an interactive entity-relationship diagram (ERD) right in your browser. Turn SQL into a diagram instantly — no signup, nothing uploaded.</h1>
 
   <header class="topbar">
     <div class="brand">
@@ -71,67 +75,61 @@
           <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>
         </svg>
       </span>
-      <span class="name">SQL&nbsp;to&nbsp;ER&nbsp;Diagram</span>
+      <span class="brand-text">
+        <span class="name">SQL&nbsp;to&nbsp;ER&nbsp;Diagram</span>
+        <a class="brand-sub" href="https://yourbrowsercandoit.com/" target="_blank" rel="noopener">part of yourbrowsercandoit.com</a>
+      </span>
     </div>
 
     <div class="actions">
-      <div class="menu-wrap">
-        <button id="btn-format" class="btn ghost caret" title="Input format (SQL · Prisma · DBML · Mermaid · PlantUML · SQLAlchemy · Sequelize)">Auto</button>
-        <div id="format-menu" class="menu" hidden></div>
+      <!-- diagram content actions (view controls live on the canvas, bottom-right) -->
+      <div class="tb-group">
+        <button id="btn-example" class="btn ghost" title="Load a sample schema">Example</button>
+        <button id="btn-infer" class="btn ghost" title="Auto-detect relationships by column name (for schemas without foreign keys)">Infer links</button>
       </div>
-      <div class="menu-wrap" id="dialect-wrap">
-        <button id="btn-dialect" class="btn ghost caret" title="Target SQL dialect">PostgreSQL</button>
-        <div id="dialect-menu" class="menu" hidden></div>
-      </div>
-      <span class="divider"></span>
-      <button id="btn-example" class="btn ghost" title="Load a sample schema">Example</button>
-      <div class="menu-wrap">
-        <button id="btn-arrange" class="btn ghost caret" title="Auto-arrange tables">Arrange</button>
-        <div id="arrange-menu" class="menu" hidden>
-          <div class="menu-label">Direction</div>
-          <button class="menu-item" data-dir="LR">Horizontal&nbsp;→</button>
-          <button class="menu-item" data-dir="TB">Vertical&nbsp;↓</button>
-          <div class="menu-sep"></div>
-          <div class="menu-label">Spacing</div>
-          <button class="menu-item" data-spacing="compact">Compact</button>
-          <button class="menu-item" data-spacing="comfortable">Comfortable</button>
-          <button class="menu-item" data-spacing="spacious">Spacious</button>
+
+      <!-- output: get the diagram out -->
+      <div class="tb-group">
+        <div class="menu-wrap">
+          <button id="btn-file" class="btn ghost caret" title="Open, save or embed a project">File</button>
+          <div id="file-menu" class="menu" hidden>
+            <button id="btn-open" class="menu-item" title="Open a saved project (.json)">Open project…</button>
+            <button id="btn-save" class="menu-item" title="Save SQL + layout to a file">Save project</button>
+            <div class="menu-sep"></div>
+            <button id="btn-embed" class="menu-item" title="Get an &lt;iframe&gt; snippet to embed this diagram (read-only, live)">Embed diagram…</button>
+          </div>
         </div>
-      </div>
-      <button id="btn-fit" class="btn ghost" title="Fit diagram to screen">Fit</button>
-      <button id="btn-infer" class="btn ghost" title="Auto-detect relationships by column name (for schemas without foreign keys)">Infer links</button>
-      <span class="divider"></span>
-      <button id="btn-open" class="btn ghost" title="Open a saved project (.json)">Open</button>
-      <button id="btn-save" class="btn ghost" title="Save SQL + layout to a file">Save</button>
-      <button id="btn-share" class="btn ghost" title="Copy a shareable link — the diagram is encoded in the URL, nothing is stored on a server">Share</button>
-      <input id="file-open" type="file" accept=".json,application/json" hidden />
-      <button id="btn-embed" class="btn ghost" title="Get an &lt;iframe&gt; snippet to embed this diagram (read-only, live)">Embed</button>
-      <span class="divider"></span>
-      <div class="menu-wrap">
-        <button id="btn-export" class="btn ghost caret" title="Export the diagram (image or code)">Export</button>
-        <div id="export-menu" class="menu" hidden>
-          <div class="menu-label">Image</div>
-          <button class="menu-item" data-export="png">PNG</button>
-          <button class="menu-item" data-export="svg">SVG</button>
-          <div class="menu-sep"></div>
-          <div class="menu-label">Code</div>
-          <button class="menu-item" data-export="mermaid">Mermaid</button>
-          <button class="menu-item" data-export="dbml">DBML</button>
-          <button class="menu-item" data-export="plantuml">PlantUML</button>
+        <input id="file-open" type="file" accept=".json,application/json" hidden />
+        <div class="menu-wrap">
+          <button id="btn-export" class="btn ghost caret" title="Export the diagram (image or code)">Export</button>
+          <div id="export-menu" class="menu" hidden>
+            <div class="menu-label">Image</div>
+            <button class="menu-item" data-export="png">PNG</button>
+            <button class="menu-item" data-export="svg">SVG</button>
+            <div class="menu-sep"></div>
+            <div class="menu-label">Code</div>
+            <button class="menu-item" data-export="mermaid">Mermaid</button>
+            <button class="menu-item" data-export="dbml">DBML</button>
+            <button class="menu-item" data-export="plantuml">PlantUML</button>
+          </div>
         </div>
+        <button id="btn-share" class="btn primary" title="Copy a shareable link — the diagram is encoded in the URL, nothing is stored on a server">Share</button>
       </div>
-      <span class="divider"></span>
-      <a id="link-github" class="btn ghost icon" href="https://github.com/royalbhati/sqltoerdiagram" target="_blank" rel="noopener noreferrer"
-         title="View source on GitHub — SQL to ER Diagram is open source" aria-label="GitHub repository">
-        <svg class="ico" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
-        </svg>
-      </a>
-      <button id="btn-theme" class="btn ghost icon" title="Toggle light / dark" aria-label="Toggle theme">
-        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/>
-        </svg>
-      </button>
+
+      <!-- app utilities -->
+      <div class="tb-group utils">
+        <a id="link-github" class="btn ghost icon muted" href="https://github.com/royalbhati/sqltoerdiagram" target="_blank" rel="noopener noreferrer"
+           title="View source on GitHub — SQL to ER Diagram is open source" aria-label="GitHub repository">
+          <svg class="ico" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </a>
+        <button id="btn-theme" class="btn ghost icon muted" title="Toggle light / dark" aria-label="Toggle theme">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/>
+          </svg>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -139,20 +137,34 @@
     <section class="editor-pane" id="editor-pane">
       <div class="pane-head">
         <div class="pane-head-left">
-          <span class="pane-title">SQL schema</span>
+          <div class="seg" id="mode-toggle" role="tablist" aria-label="Editor mode">
+            <button class="seg-btn active" data-mode="code" role="tab" title="Edit the SQL">Code</button>
+            <button class="seg-btn" data-mode="visual" role="tab" title="Edit tables &amp; columns visually">Visual</button>
+          </div>
           <span id="status" class="status"></span>
         </div>
-        <button id="btn-collapse-sql" class="icon-btn" title="Hide SQL panel" aria-label="Hide SQL panel">
-          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>
-          </svg>
-        </button>
+        <div class="pane-head-right">
+          <div class="menu-wrap">
+            <button id="btn-format" class="btn ghost caret compact" title="Input format (SQL · Prisma · DBML · Mermaid · PlantUML · SQLAlchemy · Sequelize)">Auto</button>
+            <div id="format-menu" class="menu" hidden></div>
+          </div>
+          <div class="menu-wrap" id="dialect-wrap">
+            <button id="btn-dialect" class="btn ghost caret compact" title="Target SQL dialect">PostgreSQL</button>
+            <div id="dialect-menu" class="menu" hidden></div>
+          </div>
+          <button id="btn-collapse-sql" class="icon-btn" title="Hide SQL panel" aria-label="Hide SQL panel">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="editor-stack">
         <pre class="hl" aria-hidden="true"><code id="hl"></code></pre>
         <textarea id="sql" spellcheck="false" autocomplete="off" autocapitalize="off"
           placeholder="Paste SQL (CREATE TABLE), BigQuery WITH…, Prisma, SQLAlchemy, or Sequelize…"></textarea>
       </div>
+      <div class="visual-editor" id="visual-editor" hidden></div>
     </section>
 
     <div class="splitter" id="splitter" title="Drag to resize"></div>
@@ -201,6 +213,21 @@
       </div>
 
       <div class="zoom-controls">
+        <div class="menu-wrap">
+          <button id="btn-arrange" class="btn ghost caret" title="Auto-arrange tables">Arrange</button>
+          <div id="arrange-menu" class="menu up" hidden>
+            <div class="menu-label">Direction</div>
+            <button class="menu-item" data-dir="LR">Horizontal&nbsp;→</button>
+            <button class="menu-item" data-dir="TB">Vertical&nbsp;↓</button>
+            <div class="menu-sep"></div>
+            <div class="menu-label">Spacing</div>
+            <button class="menu-item" data-spacing="compact">Compact</button>
+            <button class="menu-item" data-spacing="comfortable">Comfortable</button>
+            <button class="menu-item" data-spacing="spacious">Spacious</button>
+          </div>
+        </div>
+        <button id="btn-fit" class="btn ghost" title="Fit diagram to screen">Fit</button>
+        <span class="vsep" aria-hidden="true"></span>
         <button id="zoom-out" class="btn ghost icon" title="Zoom out" aria-label="Zoom out">−</button>
         <button id="zoom-reset" class="btn ghost" title="Reset zoom">100%</button>
         <button id="zoom-in" class="btn ghost icon" title="Zoom in" aria-label="Zoom in">+</button>
@@ -210,14 +237,18 @@
 
   <!-- Crawlable content for search engines (long-tail keywords + matches the FAQ schema) -->
   <section class="sr-only" aria-label="About SQL to ER Diagram">
-    <h2>SQL to ER Diagram — free online ERD generator</h2>
-    <p>SQL to ER Diagram is a free, open-source tool that converts a SQL schema into an
-      interactive entity-relationship diagram (ERD) right in your browser. Paste your
-      <code>CREATE TABLE</code> statements and instantly visualize tables, columns, primary
-      keys, foreign keys and relationships. Works with PostgreSQL, MySQL, SQLite and SQL
-      Server. Drag tables, auto-arrange the layout, add notes, and export to PNG or SVG.
-      Nothing is uploaded — your schema stays on your machine. It also supports
-      <a href="/prisma/">Prisma schemas</a>, SQLAlchemy and Sequelize models.</p>
+    <h2>SQL to ER Diagram — free online SQL diagram generator &amp; schema visualizer</h2>
+    <p>SQL to ER Diagram is a free, open-source tool that <strong>converts a SQL schema into a
+      diagram</strong> — an interactive entity-relationship diagram (ERD) — right in your browser.
+      Paste your <code>CREATE TABLE</code> statements or raw DDL and instantly visualize tables,
+      columns, primary keys, foreign keys and relationships. Use it as a <strong>SQL diagram
+      generator</strong>, a <strong>SQL schema visualizer</strong>, or a <strong>SQL-to-ERD
+      converter</strong> — it works with PostgreSQL, MySQL, SQLite, SQL Server, Oracle, MariaDB,
+      Snowflake and BigQuery. Drag tables, auto-arrange the layout, add notes, and export to PNG,
+      SVG, Mermaid, DBML or PlantUML. Nothing is uploaded — your schema stays on your machine. It
+      also reads <a href="/prisma/">Prisma schemas</a>, DBML, Mermaid, SQLAlchemy and Sequelize.
+      It's part of <a href="https://yourbrowsercandoit.com/" target="_blank" rel="noopener">yourbrowsercandoit.com</a>,
+      a collection of free tools that run entirely in your browser — nothing uploaded.</p>
     <h2>Guides &amp; converters</h2>
     <ul>
       <li><a href="/examples/">Database schema examples gallery</a></li>
@@ -225,15 +256,24 @@
       <li><a href="/mysql/">MySQL to ER diagram</a></li>
       <li><a href="/sqlite/">SQLite to ER diagram</a></li>
       <li><a href="/sql-server/">SQL Server to ER diagram</a></li>
-      <li><a href="/prisma/">Prisma to ER diagram</a></li>
+      <li><a href="/oracle/">Oracle to ER diagram</a></li>
+      <li><a href="/mariadb/">MariaDB to ER diagram</a></li>
+      <li><a href="/snowflake/">Snowflake to ER diagram</a></li>
+      <li><a href="/bigquery/">BigQuery to ER diagram</a></li>
+      <li><a href="/prisma/">Prisma schema visualizer</a></li>
       <li><a href="/dbml/">DBML to ER diagram</a></li>
       <li><a href="/mermaid/">Mermaid to ER diagram</a></li>
+      <li><a href="/plantuml/">PlantUML to ER diagram</a></li>
       <li><a href="/sqlalchemy/">SQLAlchemy to ER diagram</a></li>
       <li><a href="/sequelize/">Sequelize to ER diagram</a></li>
       <li><a href="/typeorm/">TypeORM to ER diagram</a></li>
       <li><a href="/django/">Django to ER diagram</a></li>
+      <li><a href="/ddl-to-er-diagram/">DDL to ER diagram</a></li>
       <li><a href="/sql-to-mermaid/">SQL to Mermaid converter</a></li>
+      <li><a href="/sql-to-dbml/">SQL to DBML converter</a></li>
+      <li><a href="/sql-to-plantuml/">SQL to PlantUML converter</a></li>
       <li><a href="/prisma-to-dbml/">Prisma to DBML converter</a></li>
+      <li><a href="/dbml-to-mermaid/">DBML to Mermaid converter</a></li>
       <li><a href="/dbml-to-er-diagram/">DBML to ER diagram</a></li>
       <li><a href="/mermaid-to-erd/">Mermaid to ERD</a></li>
     </ul>
@@ -242,10 +282,18 @@
     <p>Paste your SQL <code>CREATE TABLE</code> statements into the editor and SQL to ER
       Diagram instantly renders an interactive entity-relationship diagram. Drag tables to
       arrange them, then export as PNG or SVG.</p>
+    <h3>How do I convert SQL to a diagram online?</h3>
+    <p>Paste your SQL <code>CREATE TABLE</code> statements or DDL and the tool instantly converts
+      them into an interactive diagram you can drag, arrange and export to PNG, SVG, Mermaid, DBML
+      or PlantUML — a free online SQL-to-diagram converter, no signup.</p>
+    <h3>Is this a SQL schema visualizer?</h3>
+    <p>Yes. It visualizes any SQL database schema as an entity-relationship diagram — every table,
+      column, key and foreign-key relationship — and works with PostgreSQL, MySQL, MariaDB, SQLite,
+      SQL Server, Oracle, Snowflake and BigQuery.</p>
     <h3>Which SQL dialects are supported?</h3>
     <p>It parses standard <code>CREATE TABLE</code> and <code>ALTER TABLE</code> DDL and works
-      with PostgreSQL, MySQL, SQLite, SQL Server, Snowflake and BigQuery syntax, including primary
-      keys, foreign keys, unique and not-null constraints.</p>
+      with PostgreSQL, MySQL, MariaDB, SQLite, SQL Server, Oracle, Snowflake and BigQuery syntax,
+      including primary keys, foreign keys, unique and not-null constraints.</p>
     <h3>Is it free?</h3>
     <p>Yes. SQL to ER Diagram is completely free and open source, with no account or sign-up
       required.</p>

@@ -71,7 +71,12 @@ function splitTopCommas(body, base) {
 function clean(id) {
   if (!id) return id;
   id = id.trim();
-  return id.replace(/^[`"\[]/, '').replace(/[`"\]]$/, '');
+  // Strip a *matched* wrapping delimiter pair only: `id`, "id", [id].
+  // Stripping the sides independently would mangle e.g. the type TEXT[]
+  // (no leading '[') into TEXT[ by dropping the trailing ']'.
+  const close = { '`': '`', '"': '"', '[': ']' }[id[0]];
+  if (id.length >= 2 && close && id[id.length - 1] === close) return id.slice(1, -1);
+  return id;
 }
 function bareName(id) {
   const parts = id.split('.');
@@ -201,6 +206,7 @@ export function parseSchema(sql) {
       const body = after.slice(open + 1, end);
       const table = ensureTable(name, nameSpan, schema);
       table.bodySpan = [base + bodyLocal, base + afterStart + end];
+      table.stmtSpan = [base + cm.index, base + stmt.length];   // CREATE … (sans ';')
       parseTableBody(body, base + bodyLocal, table, relations);
       continue;
     }
@@ -355,6 +361,7 @@ function parseTableBody(body, base, table, relations) {
       fk: false,
       nameSpan: [ns, ne],
       typeSpan,
+      defSpan: [part.start, part.start + item.length],   // full "name type …" segment
     };
     table.columns.push(col);
     table.colIndex.set(colName.toLowerCase(), col);
